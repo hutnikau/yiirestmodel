@@ -3,6 +3,7 @@
 ## Installation 
 
 Extract files under protected/extensions.
+
 Add to config:
 ```
     array('api/<controller>/list', 'pattern'=>'api/<controller:\w+>', 'verb'=>'GET'),
@@ -15,7 +16,6 @@ Add to config:
 
     array('api/<controller>/delete', 'pattern'=>'api/<controller:\w+>/<id:\d+>', 'verb'=>'DELETE'),
     array('api/<controller>/delete', 'pattern'=>'api/<controller:\w+>', 'verb'=>'DELETE'),
-Extract files under protected/extensions
 ```
 
 ## Usage 
