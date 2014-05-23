@@ -2,7 +2,19 @@
 
 ## Installation 
 
+Extract files under protected/extensions.
+Add to config:
 ```
+    array('api/<controller>/list', 'pattern'=>'api/<controller:\w+>', 'verb'=>'GET'),
+    array('api/<controller>/view', 'pattern'=>'api/<controller:\w+>/<id:\d+>', 'verb'=>'GET'),
+
+    array('api/<controller>/create', 'pattern'=>'api/<controller:\w+>', 'verb'=>'POST'),
+
+    array('api/<controller>/update', 'pattern'=>'api/<controller:\w+>/<id:\d+>', 'verb'=>'PUT'),
+    array('api/<controller>/update', 'pattern'=>'api/<controller:\w+>', 'verb'=>'PUT'),
+
+    array('api/<controller>/delete', 'pattern'=>'api/<controller:\w+>/<id:\d+>', 'verb'=>'DELETE'),
+    array('api/<controller>/delete', 'pattern'=>'api/<controller:\w+>', 'verb'=>'DELETE'),
 Extract files under protected/extensions
 ```
 
