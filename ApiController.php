@@ -229,18 +229,32 @@ class ApiController extends Controller
                 $input = array($this->data);
             }
             foreach($input as $data){
-                $id = ($this->isCollection() && isset($data['id']))? $data['id'] : $this->actionParams['id'];
-                $model = $this->getModel($this->model, $id, $this->baseCriteria, false);
-                $model->attributes = $this->priorityData + $data;
-                $model->setScenario($this->model->scenario);
-                if($model->validate()){
-                    $models[] = $model;
+                $id = ($this->isCollection() && isset($data['id']))? $data['id'] : Yii::app()->request->getParam('id', null);
+                if(is_null($id)){
+                    $this->criteria = new CDbCriteria();
+                    $this->criteria->mergeWith($this->getFilterCriteria(), 'OR');
+                    $this->criteria->mergeWith($this->getSearchCriteria(), 'OR');
+
+                    if(!is_null($this->baseCriteria)){
+                        $this->criteria->mergeWith($this->baseCriteria, 'AND');
+                    }
+                    $updatedModel = $this->model->findAll($this->criteria);
                 }
                 else{
-                    $valid = false;
-                    $this->statusCode = 400;
-                    $result = array('error'=>$model->errors);
-                    break;
+                    $updatedModel = array($this->getModel($this->model, $id, $this->baseCriteria, false));
+                }
+                foreach($updatedModel as $model){
+                    $model->attributes = $this->priorityData + $data;
+                    $model->setScenario($this->model->scenario);
+                    if($model->validate()){
+                        $models[] = $model;
+                    }
+                    else{
+                        $valid = false;
+                        $this->statusCode = 400;
+                        $result = array('error'=>$model->errors);
+                        break;
+                    }
                 }
             }
             if($valid){
@@ -249,7 +263,7 @@ class ApiController extends Controller
                     $result[] = $model->attributes;
                 }
                 $this->statusCode = 200;
-                $result = $this->isCollection()? $result : $result[0];
+                $result = ($this->isCollection() || is_null($id))? $result : $result[0];
             }
         }
         else{
