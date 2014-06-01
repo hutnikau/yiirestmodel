@@ -7,19 +7,26 @@
  * 
  * <pre>
  * $relationProvider = new ApiRelationProwider('parent, child', array(
- *      "parent"=>array(
- *          "columnName"=>"userChild",
- *          "return"=>"array" //string ("object", "array") return CActiveRecord object or array
- *      )
+ *      "config"=>array(
+ *          "parent"=>array(
+ *              "columnName"=>"userChild",
+ *              "return"=>"array" //string ("object", "array") return CActiveRecord object or array
+ *          ),
+ *      ),
+ *      "model"=>$model //CActiveRecord $model for fetching relation data
  * ));
  * $model = User::model()->findByPk(1);
  * $relations = $relationProvider->getData($model); 
  * 
  * return:
  * array(
+ *      "first_name"=>"john",
+ *      "last_name"=>"doe"
+ *      ...
  *      "userChild"=>array(
- *          ...
+ *          ... //relation data
  *      )
+ *      ...
  * )
  * </pre>
  * 
@@ -72,7 +79,10 @@ class ApiRelationProvider {
     public $relations = array();
     
     public function __construct( array $relationsConfig = array()){
-        $this->relationsConfig = $relationsConfig;
+        $this->relationsConfig = $relationsConfig['config'];
+        if(isset($relationsConfig['model'])){
+            $this->model = $relationsConfig['model'];
+        }
         $this->with = Yii::app()->request->getParam( $this->requestParamName , "" );
         $this->relations = $this->normalizeRelations();
     }
@@ -118,8 +128,14 @@ class ApiRelationProvider {
      */
     public function getRalationsList(){
         $list = array();
+        $relations = array();
+        if($this->model){
+            $relations = $this->model->relations();
+        }
         foreach($this->relations as $relation){
-            //$list[] = $relation['relationName'];
+            if(isset($relations[$relation['relationName']])){
+                $list[] = $relation['relationName'];
+            }
         }
         return $list;
     }
@@ -152,6 +168,4 @@ class ApiRelationProvider {
         }
         return $result;
     }
-    
-    
 }

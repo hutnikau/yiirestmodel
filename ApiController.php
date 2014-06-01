@@ -27,9 +27,9 @@ class ApiController extends Controller
     
     /**
      * Whether the response should be sent to the end user or should be returned as an array.
-     * @var type 
+     * @var boolean 
      */
-    public $sendToEndUser;
+    public $sendToEndUser = true;
     
     /** 
      * @var array default criteria params 
@@ -37,7 +37,7 @@ class ApiController extends Controller
     public $criteriaParams = array(
         'limit' => 100, 
         'offset' => 0, 
-        'order' => 'id ASC'
+        'order' => 't.id ASC'
     );
     
     /**
@@ -82,8 +82,10 @@ class ApiController extends Controller
      * @param integer $id priority record id.
      * @return array result. Null if the result sended to end user.
      */
-    public function getView( $sendToEndUser = true, $id = null ){
-        $this->sendToEndUser = $sendToEndUser;
+    public function getView( $sendToEndUser = null, $id = null ){
+        if(is_bool($sendToEndUser)){
+            $this->sendToEndUser = $sendToEndUser;
+        }
         $this->criteria = $this->baseCriteria;
         if(is_null($id)){
             $id = isset($this->actionParams['id'])?$this->actionParams['id'] : null;
@@ -93,7 +95,12 @@ class ApiController extends Controller
             $result = $this->notFoundErrorResponse;
         }
         else{
-            $relationData = new ApiRelationProvider( $this->getRelations() );
+            $relationData = new ApiRelationProvider(
+                array(
+                    'config'=>$this->getRelations(),
+                    'model'=>$this->model
+                )
+            );
             $result = array_merge($model->attributes, $relationData->getData($model));
         }        
         
@@ -110,11 +117,18 @@ class ApiController extends Controller
      * @param boolean $sendToEndUser Whether the response should be sent to the end user or should be returned as an array.
      * @return array result. Null if the result sended to end user.
      */
-    public function getList( $sendToEndUser = true ){
-        $this->sendToEndUser = $sendToEndUser;
+    public function getList( $sendToEndUser = null ){
+        if(is_bool($sendToEndUser)){
+            $this->sendToEndUser = $sendToEndUser;
+        }
         $this->checkModel();
         $this->criteria = new CDbCriteria($this->getCriteriaParams());
-        $relationData = new ApiRelationProvider( $this->getRelations() );
+        $relationData = new ApiRelationProvider(
+            array(
+                'config'=>$this->getRelations(),
+                'model'=>$this->model
+            )
+        );
         $this->criteria->with = $relationData->getRalationsList();
         if(is_array($this->criteria->with) && !empty($this->criteria->with)){
             $this->criteria->together = true;
@@ -132,7 +146,6 @@ class ApiController extends Controller
             foreach($records as $record){
                 $result[] = array_merge($record->attributes, $relationData->getData($record));
             }
-            
         }
         catch(Exception $ex){
             $message = property_exists($ex, 'errorInfo')? $ex->errorInfo : $ex->getMessage();
@@ -156,8 +169,10 @@ class ApiController extends Controller
      * @param boolean $sendToEndUser Whether the response should be sent to the end user or should be returned as an array. 
      * @return array with new record attributes. Null if the result sended to end user.
      */
-    public function create( $sendToEndUser = true ){
-        $this->sendToEndUser = $sendToEndUser;
+    public function create( $sendToEndUser = null ){
+        if(is_bool($sendToEndUser)){
+            $this->sendToEndUser = $sendToEndUser;
+        }
 
         if(!empty($this->data)){
             $this->checkModel();
@@ -215,8 +230,10 @@ class ApiController extends Controller
      * @param int $id record id.
      * @return array with updted record attributes. Null if the result sended to end user.
      */
-    public function update($sendToEndUser = true, $id = null ){
-        $this->sendToEndUser = $sendToEndUser;
+    public function update($sendToEndUser = null, $id = null ){
+        if(is_bool($sendToEndUser)){
+            $this->sendToEndUser = $sendToEndUser;
+        }
         if(!empty($this->data)){
             if(is_null($id)){
                 $id = isset($this->actionParams['id'])?$this->actionParams['id'] : null;
@@ -282,8 +299,10 @@ class ApiController extends Controller
      * @param int $id record id
      * @return array result. Null if the result sended to end user.
      */
-    public function delete( $sendToEndUser = true, $id = null){
-        $this->sendToEndUser = $sendToEndUser;
+    public function delete( $sendToEndUser = null, $id = null){
+        if(is_bool($sendToEndUser)){
+            $this->sendToEndUser = $sendToEndUser;
+        }
         $this->checkModel();
         $result = array();
         if(isset($this->actionParams['id'])){
@@ -511,6 +530,9 @@ class ApiController extends Controller
         foreach($filterData as $filterCondition){
             $filterCriteria = new CDbCriteria;
             foreach($filterCondition as $attribute=>$condition){
+                if( strpos($attribute, '.')===false ){ //append table alias to column name
+                    $attribute = 't.'.$attribute;
+                }
                 if($condition == "" && !$partialMatch){
                     $filterCriteria->addCondition($attribute."=''");
                 }
