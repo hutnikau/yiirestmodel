@@ -1,35 +1,54 @@
 <?php
 
 /**
- * Description of ApiRelationProvider
+ * ApiRelationProvider
  *
  * Example:
- * 
  * <pre>
- * $relationProvider = new ApiRelationProwider('parent, child', array(
+ * $relationProvider = new ApiRelationProvider(
+ *    array(
  *      "config"=>array(
- *          "parent"=>array(
- *              "columnName"=>"userChild",
- *              "return"=>"array" //string ("object", "array") return CActiveRecord object or array
- *          ),
- *      ),
- *      "model"=>$model //CActiveRecord $model for fetching relation data
+ *        "comments"=>array( //HAS_MANY relation
+ *          "columnName"=>"comments",
+ *          "relationName"=>"comments",
+ *          "return"=>"array" //string ("object"|"array") return CActiveRecord object or array
+ *        ),
+ *        "profile"=>array( //HAS_ONE relation
+ *          "columnName"=>"profile",
+ *          "relationName"=>"profile",
+ *          "return"=>"array" //string ("object"|"array") return CActiveRecord object or array
+ *        ),
+ *     ),
+ *     "model"=>$model //CActiveRecord $model for fetching relation data
  * ));
  * $model = User::model()->findByPk(1);
- * $relations = $relationProvider->getData($model); 
- * 
- * return:
- * array(
- *      "first_name"=>"john",
- *      "last_name"=>"doe"
- *      ...
- *      "userChild"=>array(
- *          ... //relation data
- *      )
- *      ...
- * )
+ * $relations = $relationProvider->getData($model);
  * </pre>
- * 
+ * The above example returns the following array:
+ * <pre>
+ *   array(
+ *     'comments'=>array(
+ *        array(
+ *          'id'=>'42',
+ *          'content'=>'comment 42 content',
+ *          ...
+ *        ),
+ *        array(
+ *          'id'=>'81',
+ *          'content'=>'comment 81 content',
+ *          ...
+ *        ),
+ *        ...
+ *     ),
+ *     'profile'=>array(
+ *        'userid'=>'1',
+ *        'name'=>'username',
+ *        'login'=>'userlogin',
+ *        'email'=>'user@email.com',
+ *        ...
+ *     )
+ *   )
+ * </pre>
  * @author Oleg Gutnikov <goodnickoff@gmail.com>
  * @package api
  */
@@ -58,18 +77,18 @@ class ApiRelationProvider {
     public $with = "";
     
     /**
-     *
      * @var array relations config
      * <ul>
-     * <li>
-     * 'columnName' - string name of array key with relation data
-     * </li>
-     * <li>
-     * 'return' - 'object'|'array' return CActiveRecord object or array
-     * </li>
-     * <li>
-     * 'relationName' - string name of relation in model
-     * </li>
+     *   <li>'columnName' - string name of array key with relation data</li>
+     *   <li>'return' - 'object'|'array' return CActiveRecord object or array</li>
+     *   <li>'relationName' - string name of relation in model</li>
+     *   <li>
+     *     'keyField' - string he name of the key field. This is a field that uniquely identifies a data record. 
+     *     Data in response will be indexed by this key value. If it's not set data will be indexed in order. 
+     *   </li>
+     *   <li>
+     *     'safeAttributes' - string comma separated list of relation attributes which will be represented in response.
+     *   </li>
      * </ul>
      */
     public $relationsConfig = array();
@@ -96,26 +115,29 @@ class ApiRelationProvider {
     public function getData( CActiveRecord $model ){
         $this->model = $model;
         $result = array();
+        $relationData = array();
+        $keys = array();
+        $hasMany = false;
+        
         foreach($this->relations as $relationKey=>$relationConfig){
-            $relationName = isset($relationConfig['relationName'])?$relationConfig['relationName']:$relationKey;
             $columnName = isset($relationConfig['columnName'])?$relationConfig['columnName']:$relationKey;
-            $return = isset($relationConfig['return'])? $relationConfig['return'] : 'object';
-            
-            $relation = $model->$relationName;
-            
-            if(is_null( $relation ))
-                $relation = array();
-            
-            if(is_array($relation) && !empty($relation) && $return == 'array'){
-                foreach($relation as $relationData){
-                    $result[$columnName][] = $relationData->attributes;
+            $keys[$columnName] = isset($relationConfig['keyField'])? $relationConfig['keyField'] : false;
+            $relationData[$columnName] = $this->getRelationData($relationKey);
+        }
+        
+        foreach($relationData as $relName=>$relData){
+            if(isset($model->relations()[$relName])){
+                $result[$relName] = array();
+                foreach($relData as $data){
+                    if($keys[$relName] && isset($data[$keys[$relName]])){
+                        $result[$relName][$data[$keys[$relName]]] = $data;
+                    }
+                    else{
+                        $result[$relName][] = $data;
+                    }
                 }
-            }
-            elseif($return == 'array' && is_object($relation)){
-                $result[$columnName] = $relation->attributes;
-            }
-            else{
-                $result[$columnName] = $relation;
+            } else {
+                $result[$relName] = $relData;
             }
         }
         
@@ -123,10 +145,70 @@ class ApiRelationProvider {
     }
     
     /**
+     * Function returns relation data array. 
+     * Attributes will be filtered by {@link getSafeAttributes} method
+     * @param string $relationName
+     * @return array Array of relation datas
+     */
+    protected function getRelationData($relationName)
+    {
+        $relationConfig = $this->relations[$relationName];
+        $relationName = isset($relationConfig['relationName'])?$relationConfig['relationName']:$relationName;
+        $columnName = isset($relationConfig['columnName'])?$relationConfig['columnName']:$relationName;
+        $return = isset($relationConfig['return'])? $relationConfig['return'] : 'object';
+        $relationResult = $this->model->$relationName;
+        $result = array();
+            
+        if ($relationResult === null) {
+            $relationResult = array();
+        }
+        
+        if ($relationResult instanceof CActiveRecord) {
+            if ($return == 'array') {
+                $result = $this->getSafeAttributes($relationName, $relationResult->attributes);
+            } elseif ($return == 'object') {
+                $result = $relationResult;
+            }
+        } else {
+            $arrayOfModels = true;
+            array_walk($relationResult, function($val) use(&$arrayOfModels){
+                    $arrayOfModels = $arrayOfModels && $val instanceof CActiveRecord;
+                }
+            );
+            if($arrayOfModels){
+                foreach ($relationResult as $model) {
+                    $result[] = $this->getSafeAttributes($relationName, $model->attributes);
+                }
+            } else {
+                if (count($relationResult) == count($relationResult, COUNT_RECURSIVE)) {//multidimensional array
+                    foreach ($relationResult as $data) {
+                        $result[] = $this->getSafeAttributes($relationName, $data);
+                    }
+                } else {
+                    $result = $this->getSafeAttributes($relationName, $relationResult);
+                }
+            }
+        }
+        return $result;
+    }
+
+
+    /**
+     * Function returns relation attribures that lists in 
+     * @param type $attributes
+     */
+    protected function getSafeAttributes($relationName, $attributes){
+        if(isset($this->relations[$relationName]['safeAttributes']) && is_array($this->relations[$relationName]['safeAttributes'])){
+            $attributes = array_intersect_key($attributes, array_flip($this->relations[$relationName]['safeAttributes']));
+        }
+        return $attributes;
+    }
+    
+    /**
      * Function returns array with list of relations names
      * @return array
      */
-    public function getRalationsList(){
+    public function getRelationsList(){
         $list = array();
         $relations = array();
         if($this->model){
@@ -158,6 +240,9 @@ class ApiRelationProvider {
                 $relationName = trim($relationName);
                 if(isset($this->relationsConfig[$relationName])){
                     $relationConfig = $this->relationsConfig[$relationName];
+                    if(isset($relationConfig['safeAttributes'])){
+                        $relationConfig['safeAttributes'] = array_map('trim', explode(',', $relationConfig['safeAttributes']));
+                    }
                 }
                 else{
                     throw new CHttpException(400, "relation $relationName does not exists.");

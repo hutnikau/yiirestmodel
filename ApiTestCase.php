@@ -2,7 +2,7 @@
 /**
  * This file contains the ApiTestCase class.
  *
- * @author Oleg Gutnikov <goodnickoff@gmail.com>
+
  */
 
 /**
@@ -26,7 +26,7 @@
  * );
  * </pre>
  * 
- * @author Oleg Gutnikov <goodnickoff@gmail.com>
+
  * @package test
  * 
  */
@@ -39,11 +39,11 @@ class ApiTestCase extends CDbTestCase {
     /** 
      * @var string authentication url 
      */
-    public $loginUrl = 'api/login';
+    public $loginUrl = 'login';
     /** 
      * @var array data which will be sended for authentication.
      */
-    public $loginData = array('login'=>'admin', 'password'=>'admin');
+    public $loginData = array('username'=>'admin', 'password'=>'admin');
     
     /**
      * Function authenticates in application and set $authCookies from response;
@@ -53,8 +53,8 @@ class ApiTestCase extends CDbTestCase {
     public function getAuthCookies($reload = false){
         if($reload || is_null($this->authCookies)){
             $response = $this->post($this->loginUrl, $this->loginData);
-            
             $cookies = array();
+            $this->createReport($response['body']);
             foreach($response['cookies'] as $cookieName=>$cookieData){
                 $cookies[$cookieName] = $cookieData['value'];
             }
@@ -94,7 +94,6 @@ class ApiTestCase extends CDbTestCase {
         if(!empty($params)){
             $url .= "?".$this->_encode($params);
         }
-        
         return $this->request($url, $params, $options);  
     }
     
@@ -164,8 +163,9 @@ class ApiTestCase extends CDbTestCase {
      * </pre>
      */
     private function request($url, array $params=array(), array $options=array()){
-        $ch = curl_init(rtrim(TEST_BASE_URL,'/').'/'.trim($url, '/'));
-        
+        $url = rtrim(TEST_BASE_URL,'/').'/'.trim($url, '/');
+        $ch = curl_init($url);
+
         $defaultOptions = array(
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HEADER => 1,

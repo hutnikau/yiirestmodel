@@ -10,6 +10,8 @@
  */
 class ApiController extends Controller
 {
+    public $idParamName = 'id';
+    
     /** @var array params from php://input. */
     public $data = array();
     
@@ -22,9 +24,6 @@ class ApiController extends Controller
     /** @var int Http Status-Code */
     public $statusCode = 200;
     
-    /** @var CDbCriteria Precedence criteria. */
-    public $baseCriteria;
-    
     /**
      * Whether the response should be sent to the end user or should be returned as an array.
      * @var boolean 
@@ -32,15 +31,6 @@ class ApiController extends Controller
     public $sendToEndUser = true;
     
     /** 
-     * @var array default criteria params 
-     */
-    public $criteriaParams = array(
-        'limit' => 100, 
-        'offset' => 0, 
-        'order' => 't.id ASC'
-    );
-    
-    /**
      * @var array contains information about the range of selected data.
      * <ul>
      * <li>
@@ -66,12 +56,41 @@ class ApiController extends Controller
     public $criteria;
     
     /**
+     * @var array default criteria params 
+     */
+    public $criteriaParams;
+    
+    /**
      * Response to the user when no record found.
      * @var array  
      */
     public $notFoundErrorResponse = array( 'error'=>array('Not found') );
     
-    public function __construct($id, $module=null){
+    /**
+     * Whether to quote the alias name
+     * @var boolean 
+     */
+    public $tableAliasQuotes = false;
+    
+    /**
+     * Array of models which was affected during last operation (create, update or delete)
+     * @var CActiveRecord[] 
+     */
+    private $_affectedModels = array();
+    private $_modelsForAffect = null;
+    
+    /** @var CDbCriteria Precedence criteria. */
+    private $_baseCriteria;
+    
+    /** @var array model errors */
+    private $_modelErrors;
+    
+    /** @var string request type, such as GET, POST, PUT, DELETE.  */
+    private $_method;
+    
+    
+    public function __construct($id, $module = null)
+    {
         parent::__construct($id, $module);
         $this->data = $this->getJson();
     }
@@ -79,22 +98,20 @@ class ApiController extends Controller
     /**
      * Function send response with record attributes or 404 error if no record found.
      * @param boolean $sendToEndUser Whether the response should be sent to the end user or should be returned as an array.
-     * @param integer $id priority record id.
+     * @param integer $recordId priority record id.
      * @return array result. Null if the result sended to end user.
      */
-    public function getView( $sendToEndUser = null, $id = null ){
-        if(is_bool($sendToEndUser)){
+    public function getView($sendToEndUser = null, $recordId = null)
+    {
+        if (is_bool($sendToEndUser)) {
             $this->sendToEndUser = $sendToEndUser;
         }
-        $this->criteria = $this->baseCriteria;
-        if(is_null($id)){
-            $id = isset($this->actionParams['id'])?$this->actionParams['id'] : null;
-        }
-        $model = $this->getModel($this->model, $id, $this->baseCriteria, false);
-        if(is_null($model)){
+        $id = $this->getRecordId($recordId);
+        $model = $this->getModel($this->model, $id, false);
+        if (is_null($model)) {
             $result = $this->notFoundErrorResponse;
-        }
-        else{
+            $this->statusCode = 404;
+        } else {
             $relationData = new ApiRelationProvider(
                 array(
                     'config'=>$this->getRelations(),
@@ -103,12 +120,7 @@ class ApiController extends Controller
             );
             $result = array_merge($model->attributes, $relationData->getData($model));
         }        
-        
-        if( !$this->sendToEndUser ){
-            return $result;
-        }
-        
-        $this->sendJson( $result, $this->statusCode );
+        return $this->returnResult($result);
     }
     
     /**
@@ -117,28 +129,26 @@ class ApiController extends Controller
      * @param boolean $sendToEndUser Whether the response should be sent to the end user or should be returned as an array.
      * @return array result. Null if the result sended to end user.
      */
-    public function getList( $sendToEndUser = null ){
-        if(is_bool($sendToEndUser)){
+    public function getList($sendToEndUser = null)
+    {
+        if (is_bool($sendToEndUser)) {
             $this->sendToEndUser = $sendToEndUser;
         }
         $this->checkModel();
-        $this->criteria = new CDbCriteria($this->getCriteriaParams());
+        $this->criteria = new CDbCriteria($this->getFinalCriteriaParams());
         $relationData = new ApiRelationProvider(
             array(
                 'config'=>$this->getRelations(),
                 'model'=>$this->model
             )
         );
-        $this->criteria->with = $relationData->getRalationsList();
+        $this->criteria->with = $relationData->getRelationsList();
         if(is_array($this->criteria->with) && !empty($this->criteria->with)){
             $this->criteria->together = true;
         }
         $this->criteria->mergeWith($this->getFilterCriteria() , 'OR');
         $this->criteria->mergeWith($this->getSearchCriteria() , 'OR');
-        
-        if(!is_null($this->baseCriteria)){
-            $this->criteria->mergeWith($this->baseCriteria, 'AND');
-        }
+        $this->criteria->mergeWith($this->baseCriteria, 'AND');
         
         try{
             $records = $this->model->findAll( $this->criteria );
@@ -152,15 +162,7 @@ class ApiController extends Controller
             $result = array("error"=>$message);
             $this->statusCode = 400;
         }
-
-        if( !$this->sendToEndUser ) { 
-            return $result;
-        }
-        $this->sendJson( 
-            $result, 
-            $this->statusCode,
-            $this->statusCode==200?array($this->getContentRangeHeader()) : array()
-        );
+        return $this->returnResult($result, $this->statusCode==200?array($this->getContentRangeHeader()) : array());
     }
     
     /**
@@ -169,55 +171,44 @@ class ApiController extends Controller
      * @param boolean $sendToEndUser Whether the response should be sent to the end user or should be returned as an array. 
      * @return array with new record attributes. Null if the result sended to end user.
      */
-    public function create( $sendToEndUser = null ){
-        if(is_bool($sendToEndUser)){
+    public function create($sendToEndUser = null)
+    {
+        if (is_bool($sendToEndUser)) {
             $this->sendToEndUser = $sendToEndUser;
         }
 
-        if(!empty($this->data)){
-            $this->checkModel();
-            $input = $this->data;
+        if (!empty($this->data)) {
             $result = array();
-            $models = array();
-            $valid = true;
-            if(!$this->isCollection()){
-                $input = array($this->data);
-            }
-            foreach($input as $data){
-                $model = new $this->model;
-                $model->attributes = $this->priorityData + $data;
-                $model->setScenario($this->model->scenario);
-                if($model->validate()){
-                    $models[] = $model;
-                }
-                else{
-                    $valid = false;
-                    $this->statusCode = 400;
-                    $result = array('error'=>$model->errors);
-                    break;
-                }
-            }
-            if($valid){
+            $valid = $this->validate(false);
+            if ($valid) {
                 try{
-                    foreach($models as $model){
+                    $input = $this->data;
+                    if (!$this->isCollection()) {
+                        $input = array($this->data);
+                    }
+                    foreach($input as $data){
+                        $model = new $this->model;
+                        $model->setScenario($this->model->scenario);
+                        $model->attributes = $this->priorityData + $data;
                         $model->save();
+                        $this->_affectedModels[] = $model;
                         $result[] = $model->attributes;
                     }
-                    $result = $this->isCollection()? $result : $result[0];
-                }
-                catch(Exception $ex){
+                    $result = count($this->_affectedModels)===1? $result[0] : $result;
+                } catch (Exception $ex) {
                     $message = property_exists($ex, 'errorInfo')? $ex->errorInfo : $ex->getMessage();
                     $result = array("error"=>$message);
                     $this->statusCode = 400;
                 }
+            } else {
+                $this->statusCode = 400;
+                $result = array('error'=>$this->getModelErrors());
             }
-        }
-        else{
+        } else {
             $this->statusCode = 400;
             $result = array('error'=>'Data is not received.');
         }
-        
-        if( !$this->sendToEndUser ){
+        if (!$this->sendToEndUser) {
             return $result;
         }
         $this->sendJson($result, $this->statusCode);
@@ -230,63 +221,43 @@ class ApiController extends Controller
      * @param int $id record id.
      * @return array with updted record attributes. Null if the result sended to end user.
      */
-    public function update($sendToEndUser = null, $id = null ){
-        if(is_bool($sendToEndUser)){
+    public function update($sendToEndUser = null, $id = null)
+    {
+        if (is_bool($sendToEndUser)) {
             $this->sendToEndUser = $sendToEndUser;
         }
-        if(!empty($this->data)){
-            if(is_null($id)){
-                $id = isset($this->actionParams['id'])?$this->actionParams['id'] : null;
-            }
-            $input = $this->data;
+        if (!empty($this->data)) {
             $result = array();
-            $models = array();
-            $valid = true;
-            if(!$this->isCollection()){
+            $input = $this->data;
+            if (!$this->isCollection()) {
                 $input = array($this->data);
             }
-            foreach($input as $data){
-                $id = ($this->isCollection() && isset($data['id']))? $data['id'] : Yii::app()->request->getParam('id', null);
-                if(is_null($id)){
-                    $this->criteria = new CDbCriteria();
-                    $this->criteria->mergeWith($this->getFilterCriteria(), 'OR');
-                    $this->criteria->mergeWith($this->getSearchCriteria(), 'OR');
-
-                    if(!is_null($this->baseCriteria)){
-                        $this->criteria->mergeWith($this->baseCriteria, 'AND');
-                    }
-                    $updatedModel = $this->model->findAll($this->criteria);
-                }
-                else{
-                    $updatedModel = array($this->getModel($this->model, $id, $this->baseCriteria, false));
-                }
-                foreach($updatedModel as $model){
-                    $model->attributes = $this->priorityData + $data;
-                    $model->setScenario($this->model->scenario);
-                    if($model->validate()){
-                        $models[] = $model;
-                    }
-                    else{
-                        $valid = false;
-                        $this->statusCode = 400;
-                        $result = array('error'=>$model->errors);
-                        break;
-                    }
-                }
+            $updatedModel = $this->getModelsForAffect();
+            if (count($updatedModel) === 0) {
+                $result = $this->notFoundErrorResponse;
+                $this->statusCode = 404;
+                $valid = false;
             }
-            if($valid){
+            
+            $valid = $this->validate(false);
+            
+            if ($valid) {
+                $models = $this->getModelsForAffect();
                 foreach($models as $model){
                     $model->save();
+                    $this->_affectedModels[] = $model;
                     $result[] = $model->attributes;
                 }
                 $this->statusCode = 200;
-                $result = ($this->isCollection() || is_null($id))? $result : $result[0];
+                $result = (count($models)===1)? $result[0] : $result;
+            } else {
+                $this->statusCode = 400;
+                $result = array('error'=>$this->getModelErrors());
             }
-        }
-        else{
+        } else {
             $result = array('error'=>'Data is not received.');
         }
-        if( !$this->sendToEndUser ){
+        if (!$this->sendToEndUser) {
             return $result;
         }
         $this->sendJson($result, $this->statusCode);
@@ -296,56 +267,40 @@ class ApiController extends Controller
      * Function deletes record. If $id is null then delete all records.
      * Deleted records can be filtered by 'filter' and 'search' params.
      * @param boolean $sendToEndUser Whether the response should be sent to the end user or should be returned as an array. 
-     * @param int $id record id
      * @return array result. Null if the result sended to end user.
      */
-    public function delete( $sendToEndUser = null, $id = null){
-        if(is_bool($sendToEndUser)){
+    public function delete($sendToEndUser = null)
+    {
+        if (is_bool($sendToEndUser)) {
             $this->sendToEndUser = $sendToEndUser;
         }
         $this->checkModel();
         $result = array();
-        if(isset($this->actionParams['id'])){
-            $id = $this->actionParams['id'];
+        
+        $this->_affectedModels = $this->getModelsForAffect();
+        if (count($this->_affectedModels) === 0) {
+            $result = $this->notFoundErrorResponse;
+            $this->statusCode = 404;
         }
-        if(is_null($id)){
-            $this->criteria = new CDbCriteria();
-            $this->criteria->mergeWith($this->getFilterCriteria(), 'OR');
-            $this->criteria->mergeWith($this->getSearchCriteria(), 'OR');
-
-            if(!is_null($this->baseCriteria)){
-                $this->criteria->mergeWith($this->baseCriteria, 'AND');
-            }
-            $this->model = $this->model->findAll($this->criteria);
-            foreach($this->model as $model){
-                if($model->delete()){
-                    $result[] = $model->attributes;
-                }
-                else{
-                    $result = array('error'=>$model->errors);
-                    $this->statusCode = 400;
-                    break;
-                }
+        
+        foreach ($this->_affectedModels as $model) {
+            if ($model->delete()) {
+                $result[] = $model->attributes;
+            } else {
+                $result = array('error'=>$model->errors);
+                $this->statusCode = 400;
+                break;
             }
         }
-        else{
-            $this->model = $this->getModel($this->model, $id, $this->baseCriteria);
-            if(!is_null($this->model)){
-                $this->model->delete();
-                $result = $this->model->attributes;
-                $this->statusCode = 200;
-            }
-            else{
-                $result = $this->notFoundErrorResponse;
-                $this->statusCode = 404;
-            }
-        }
-                
-        if( !$this->sendToEndUser ){
+        
+        if (count($this->notFoundErrorResponse) == 1 && !isset($result['error'])) {
+            $result = $result[0];
+        }        
+        if (!$this->sendToEndUser) {
             return $result;
         }
         
-        $this->sendJson( $result, $this->statusCode );
+        $this->sendJson($result, $this->statusCode);
     }
     
     /**
@@ -355,22 +310,19 @@ class ApiController extends Controller
      * 
      * @param CActiveRecord $model Model class instance
      * @param int $id id attribute for which you want to find a record.
-     * @param CDbCriteria $baseCriteria precedence criteria.
-     * @param boolean $newIfNull create new model in $id is null.
-     * If $id is not set then return empty model
+     * @param boolean $newIfNull create new model if $id is null.
+     * If $id parameter is not set then return empty model
      * @return CActiveRecord model
      */
-    public function getModel( CActiveRecord $model, $id = null, $baseCriteria = null, $newIfNull = true ){
+    public function getModel(CActiveRecord $model, $id = null, $newIfNull = true)
+    {
         if(is_null($id) && $newIfNull)
             return new $model;
         
         $this->criteria = new CDbCriteria();
-        $this->criteria->addCondition('id=:id');
+        $this->criteria->addCondition("$this->idParamName=:id");
         $this->criteria->params[':id'] = $id;
-        
-        if(!is_null($baseCriteria)){
-            $this->criteria->mergeWith($baseCriteria);
-        }
+        $this->criteria->mergeWith($this->baseCriteria);
         
         $model = $model->find($this->criteria);
         
@@ -387,20 +339,226 @@ class ApiController extends Controller
         return $model;
     }
     
+    
     /**
-     * Function returns relations rules for API entity
-     * @return array array of relations
+     * Function returns array of models which will be affected (update or delete)
+     * or array of new models on create request
+     * @param boolean $refresh find models or return from cache.
      */
-    public function getRelations(){
+    public function getModelsForAffect($refresh = false)
+    {
+        if ($this->_modelsForAffect == null || $refresh) {
+            $this->_modelsForAffect = array();
+            $input = $this->data;
+            if(!$this->isCollection()){
+                $input = array($this->data);
+            } 
+            
+            if (empty($input)) {
+                $input = array($this->idParamName=>Yii::app()->request->getParam($this->idParamName, null));
+            }
+            
+            foreach ($input as $data) {
+                $id = ($this->isCollection() && isset($data[$this->idParamName]))? $data[$this->idParamName] : Yii::app()->request->getParam($this->idParamName, null);
+                if ($id === null && !$this->isCollection() && $this->getMethod() !== 'POST') {
+                    $this->criteria = new CDbCriteria();
+                    $this->criteria->mergeWith($this->getFilterCriteria(), 'OR');
+                    $this->criteria->mergeWith($this->getSearchCriteria(), 'OR');
+                    $this->criteria->mergeWith($this->baseCriteria, 'AND');
+
+                    $this->_modelsForAffect = array_merge($this->model->findAll($this->criteria));
+                } elseif($id === null && $this->isCollection() && $this->getMethod() === 'POST') {
+                    $this->_modelsForAffect[] = new $this->model($this->model->getScenario());
+                } else {
+                    $model = $this->getModel($this->model, $id);
+                    if ($model !== null) {
+                        $this->_modelsForAffect[] = $model;
+                    }
+                }
+            }
+        }
+        return $this->_modelsForAffect;
+    }
+    
+    /**
+     * Performs the validation.
+     *
+     * This method executes the validation rules as declared in model rules.
+     * Only the rules applicable to the current scenario will be executed.
+     *
+     * Errors found during the validation can be retrieved via {@link getModelErrors}.
+     *
+     * @param boolean $sendToEndUser Whether the response should be sent to the end user or should be returned as an array. 
+     * @return boolean whether the validation is successful without any error.
+     */
+    public function validate($sendToEndUser = null)
+    {
+        if (!empty($this->data)) {
+            $input = $this->data;
+            $result = array();
+            $valid = true;
+            if (!$this->isCollection()) {
+                $input = array($this->data);
+            }
+            if ($this->getMethod() === 'POST') {
+                foreach ($input as $data) {
+                    $model = new $this->model;
+                    $model->attributes = $this->priorityData + $data;
+                    $model->setScenario($this->model->scenario);
+                    if (!$model->validate()) {
+                        $valid = false;
+                        $this->statusCode = 400;
+                        $result[] = $model->errors;
+                    }
+                }
+            } elseif ($this->getMethod() === 'PUT') {
+                $models = $this->getModelsForAffect();
+                foreach ($models as $model) {
+                    if (!$this->isCollection()) {
+                        $data = $input;
+                    } else {
+                        $data = array_values(array_filter($input, function($val) use ($model){return $val[$this->idParamName]==$model->{$this->idParamName};}));
+                    }
+
+                    $model->attributes = $this->priorityData + $data[0];
+                    $model->setScenario($this->model->scenario);
+                    if (!$model->validate()) {
+                        $valid = false;
+                        $this->statusCode = 400;
+                        $result[] = $model->errors;
+                    }
+                }
+            }
+            
+        } else {
+            if (!$sendToEndUser) {
+                $result = array('error'=>'Data is not received.');
+            } else {
+                return false;
+            }
+        }
+        
+        $this->_modelErrors = $valid ? null : $result; 
+        
+        if (!$sendToEndUser) {
+            return $valid;
+        }
+        
+        $this->sendJson($result, $this->statusCode);
+    }
+    
+    /**
+     * Returns the errors for all models.
+     * @return array errors for all models. Empty array is returned if no error.
+     */
+    public function getModelErrors()
+    {
+        if(!$this->isCollection() && isset($this->_modelErrors[0])){
+            return $this->_modelErrors[0];
+        }
+        return $this->_modelErrors;
+    }
+    
+    /**
+     * Function returns relations rules for API entity.
+     * Example:
+     * <pre>
+     * return array(
+     *   'comments'=>array(
+     *      'columnName'=>'usreComments',       //string name of array key with relation data
+     *      'return'=>'array',                  //'object'|'array' return CActiveRecord object or array
+     *      'relationName'=>'comments',         //string name of relation in model
+     *      'keyField'=>'id',                   //string he name of the key field. This is a field that uniquely identifies a data record. 
+     *                                          //Data in response will be indexed by this key value. If it's not set data will be indexed in order. 
+     *      'safeAttributes'=>'content, date'   //string comma separated list of relation attributes which will be represented in response.
+     *    ),      
+     * );
+     * </pre>
+     * @return array array of relation configs
+     * @see ApiRelationProvider::$relationsConfig.
+     */
+    public function getRelations()
+    {
         return array();
     }
     
+    /**
+     * Returns the named GET or POST parameter value.
+     * If the GET or POST parameter does not exist, the second parameter to this method will be returned.
+     * If both GET and POST contains such a named parameter, the GET parameter takes precedence.
+     * @param string $name the GET parameter name
+     * @param mixed $defaultValue the default parameter value if the GET parameter does not exist.
+     * @return mixed the parameter value
+     */
+    public function getParam($name, $defaultValue=null)
+    {
+        return isset($this->data[$name]) ?$this->data[$name] : $defaultValue;
+    }
+    
+    /**
+     * Function returns array of model which was affected during last operation (create or update).
+     * If no models was affected function returns empty array.
+     * @return CActiveRecord[] Affexted models
+     */
+    public function getAffectedModels()
+    {
+        return $this->_affectedModels;
+    }
+    
+    /**
+     * Function returns base criteria wich will be used for searching models.
+     * Parameters of this criteria will be used for records when searching, updating and deleting data.
+     * @param boolean $refresh whether to reload cached _baseCriteria prop. 
+     * @return CDbCriteria
+     */
+    public function getBaseCriteria($refresh = false)
+    {
+        if ($this->_baseCriteria === null || $refresh) {
+            $this->_baseCriteria = new CDbCriteria();
+        } 
+        return $this->_baseCriteria;
+    }
+    
+    /**
+     * Function sets base criteria.
+     * @see getBaseCriteria
+     * @param CDbCriteria $criteria
+     * @return CDbCriteria
+     */
+    public function setBaseCriteria(CDbCriteria $criteria)
+    {
+        $this->_baseCriteria = $criteria;
+    }
+    
+    /**
+     * Function returns the request type, such as GET, POST, HEAD, PUT, DELETE. 
+     * @return string
+     */
+    public function getMethod()
+    {
+        if ($this->_method === null) {
+            $this->_method = Yii::app()->request->requestType;
+        }
+            
+        return $this->_method;
+    }
+    
+    /**
+     * Function sets the request type, such as GET, POST, HEAD, PUT, DELETE. 
+     * @param string $type Request type
+     * @return string
+     */
+    public function setMethod($type)
+    {
+        $this->_method = $type;
+    }
     
     /**
      * Function return Content-Range header value
      * @return string Content-Range
      */
-    protected function getContentRangeHeader(){
+    protected function getContentRangeHeader()
+    {
         $total = $this->model->count( $this->criteria );
         $start = ($this->criteria->offset < 0)? 0 : $this->criteria->offset;
         $end = ($this->criteria->limit > $total)? $total-1 : $this->criteria->limit+$start-1;
@@ -417,10 +575,19 @@ class ApiController extends Controller
     
     /**
      * Functions returns array of CDbCriteria params. 
-     * The array contains the values ​​of a $this->criteriaParams array that can be overwritten with the values ​​from $_GET parameters.
+     * The array contains the values ​​of a $this->_criteriaParams array that can be overwritten with the values ​​from $_GET parameters.
      * @return array CDbCriteria params.
      */
-    protected function getCriteriaParams(){
+    protected function getFinalCriteriaParams()
+    {
+        
+        if ($this->criteriaParams === null) {
+            $this->criteriaParams = array(
+                'limit' => 100, 
+                'offset' => 0
+            );
+            $this->criteriaParams['order'] = $this->model!==null ? $this->model->getTableAlias($this->tableAliasQuotes).".$this->idParamName ASC": "t.$this->idParamName ASC"; 
+        }
 
         $criteriaParams = array_intersect_key(
             $this->actionParams, 
@@ -436,15 +603,16 @@ class ApiController extends Controller
      * 
      * @return boolean if $this->data is collection of models attributes
      */
-    protected function isCollection($data = null){
-        if(is_null($data)){
+    protected function isCollection($data = null)
+    {
+        if (is_null($data)) {
             $data = $this->data;
         }
-        if(array_values($data) !== $data){
+        if (array_values($data) !== $data || empty($data)) {
             return false;
         }
-        foreach($data as $attributes){
-            if(!is_array($attributes)){
+        foreach ($data as $attributes) {
+            if (!is_array($attributes)) {
                 return false;
             }
         }
@@ -473,13 +641,13 @@ class ApiController extends Controller
      * )
      * </pre>
      */
-    protected function processFilter($data){
+    protected function processFilter($data)
+    {
         $data = json_decode($data);
         $filterData = array();
-        if(is_object($data)){
+        if (is_object($data)) {
             $filterData[] = $this->parseFilterObject($data);
-        }
-        elseif(is_array($data)){
+        } elseif (is_array($data)) {
             foreach($data as $filterOrCondition){
                 if(is_object($filterOrCondition)){
                     $filterData[] = $this->parseFilterObject($filterOrCondition);
@@ -521,22 +689,22 @@ class ApiController extends Controller
      * 
      * @return CDbCriteria 
      */
-    protected function getFilterCriteria($partialMatch = false, $filterData = null){
-        if(is_null($filterData)){
-            $filter = Yii::app()->request->getParam( 'filter' , "" );
+    protected function getFilterCriteria($partialMatch = false, $filterData = null)
+    {
+        if (is_null($filterData)) {
+            $filter = Yii::app()->request->getParam('filter' , "");
             $filterData = $this->processFilter($filter);
         }
         $criteria = new CDbCriteria;
-        foreach($filterData as $filterCondition){
+        foreach ($filterData as $filterCondition) {
             $filterCriteria = new CDbCriteria;
-            foreach($filterCondition as $attribute=>$condition){
-                if( strpos($attribute, '.')===false ){ //append table alias to column name
-                    $attribute = 't.'.$attribute;
+            foreach ($filterCondition as $attribute=>$condition) {
+                if (strpos($attribute, '.')===false){ //append table alias to column name
+                    $attribute = $this->model->getTableAlias($this->tableAliasQuotes).'.'.$attribute;
                 }
-                if($condition == "" && !$partialMatch){
+                if ($condition == "" && !$partialMatch) {
                     $filterCriteria->addCondition($attribute."=''");
-                }
-                else{
+                } else {
                     $filterCriteria->compare($attribute, $condition, $partialMatch);
                 }
             }
@@ -549,8 +717,9 @@ class ApiController extends Controller
      * Function creates criteria from search data in request GET paramseters
      * @return CDbCriteria 
      */
-    protected function getSearchCriteria(){
-        $search = Yii::app()->request->getParam( 'search' , "" );
+    protected function getSearchCriteria()
+    {
+        $search = Yii::app()->request->getParam('search' , "");
         $searchData = $this->processFilter($search);
         
         return $this->getFilterCriteria(true, $searchData);
@@ -573,7 +742,8 @@ class ApiController extends Controller
      * )
      * </pre>
      */
-    protected function parseFilterObject($filter){
+    protected function parseFilterObject($filter)
+    {
         $result = array();
         if(is_object($filter)){
             foreach($filter as $attribute=>$value){
@@ -587,12 +757,41 @@ class ApiController extends Controller
     /**
      * Function checks if $this->model property is not null and its instance of ActiveRecord class
      */
-    protected function checkModel(){
+    protected function checkModel()
+    {
         if(is_null($this->model) || !$this->model instanceof CActiveRecord){
-            $this->sendJson(
-                array( 'error'=>array('Wrong collection model.') ), 
-                500
-            );
+            throw new CDbException(Yii::t('yii','ApiController::model property must be an instance of CActiveRecord'));
         }
+    }
+    
+    /**
+     * Function returns $id record attribure.
+     * If $id parameter is passed and it is nuneric then it will be returned.
+     * Otherwise $id will be obtained from $_GET['id'].
+     * @param integer $id
+     */
+    protected function getRecordId($id = null)
+    {
+        if (!is_numeric($id)) {
+            $id = Yii::app()->request->getParam($this->idParamName, null);
+        }
+        return $id;
+    }
+     
+    /**
+     * Function returns result of operation depends on $this->sendToEndUser property.
+     * If <code>$this->sendToEndUser</code> is true, then result will be sended to end user and application will be terminated.
+     * If <code>$this->sendToEndUser</code> is false, then result will be returned as array.
+     * @param array $result
+     * @param array $headers http headers array.
+     * @return array
+     */
+    private function returnResult($result, $headers = array())
+    {
+        if (!$this->sendToEndUser) {
+            return $result;
+        }
+        
+        $this->sendJson($result, $this->statusCode, $headers);
     }
 }

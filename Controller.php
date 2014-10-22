@@ -10,12 +10,9 @@ class Controller extends CController
 	 * meaning using a single column layout. See 'protected/views/layouts/column1.php'.
 	 */
 	public $layout = 'false';
-	/**
-	 * @var array the breadcrumbs of the current page. The value of this property will
-	 * be assigned to {@link CBreadcrumbs::links}. Please refer to {@link CBreadcrumbs::links}
-	 * for more details on how to specify this property.
-	 */
-        
+        public $statusCode = 200;
+        public $breadcrumbs = array();
+                
         public function __construct($id,$module=null){
             parent::__construct($id,$module);
         }
@@ -61,11 +58,16 @@ class Controller extends CController
          * @param int $status code.
          * @param array $headers http headers array.
          */
-        public function sendJson($data, $status = 200, array $headers=array()){
+        public function sendJson($data, $status = null, array $headers=array())
+        {
+            if( $status === null ) {
+                $status = $this->statusCode;
+            }
             $this->layout = false;
             $status_header = 'HTTP/1.1 ' . $status . ' ' . $this->_getStatusCodeMessage($status);
             header($status_header);
             header('Content-type: application/json');
+            //header('Content-type: text/html');
 
             foreach($headers as $header){
                 header($header);
@@ -79,13 +81,20 @@ class Controller extends CController
          * Function displays "access denied" message to end users. And terminate the application
          * @return null
          */
-        protected function accessDenied(){
-            $this->sendJson( 
-                array( 
-                    'error'=>array('access'=>Yii::t('yii', 'You do not have sufficient permissions to access.')) 
-                ), 
-                403
-            );
+        protected function accessDenied($json=true){
+            if($json){
+                $this->sendJson( 
+                    array( 
+                        'error'=>array('access'=>Yii::t('yii', 'You do not have sufficient permissions to access.')) 
+                    ), 
+                    403
+                );
+            }
+            else {
+                throw new CHttpException('You do not have sufficient permissions to access.', 403);
+            }
+            
+            Yii::app()->end();
         }
         
         /**

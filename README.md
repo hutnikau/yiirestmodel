@@ -21,7 +21,7 @@ Add to config:
 ## Usage 
 
 Create module and controllers in it.
-Controller example:
+Simple controller example:
 ```php
 /**
  * Description of UserController
@@ -29,21 +29,96 @@ Controller example:
  * @author Oleg Gutnikov <goodnickoff@gmail.com>
  * @package api\Users
  */
-class UsersController extends ApiController{
+class UsersController extends ApiController
+{
     
-    public function __construct($id, $module = null) {
+    public function __construct($id, $module = null) 
+    {
+        $this->model = new Comment('read');
+        parent::__construct($id, $module);
+    }
+    
+    /**
+     * Function returns comment data
+     * @method GET
+     */
+    public function actionView()
+    {
+        $this->getView();
+    }
+    
+    /**
+     * Function returns comments list
+     * @method GET
+     */
+    public function actionList()
+    {
+        $this->getList();
+    }
+    
+    /**
+     * Function creates new comment.
+     * @method POST
+     */
+    public function actionCreate()
+    {
+        $this->create();
+    }
+    
+    /**
+     * Function updates comment.
+     * @method PUT
+     */
+    public function actionUpdate(){
+        $this->update();
+    }
+    
+    /**
+     * Function deletes comment.
+     * @method DELETE
+     */
+    public function actionDelete()
+    {
+        $userData = $this->delete();
+    }
+    
+    public function getRelations() 
+    {
+        return array(
+            'creator'=>array(       // relation GET parameter name (...?with=creator)
+                'relationName'=>'user',  //model relation name
+                'columnName'=>'creator', //column name in response
+                'return'=>'array'        //'array'|'object'  return array or model object
+            )
+        );
+    }
+}
+
+```
+Advsnced controller example:
+```php
+/**
+ * Description of UserController
+ *
+ * @author Oleg Gutnikov <goodnickoff@gmail.com>
+ * @package api\Users
+ */
+class UsersController extends ApiController
+{
+    
+    public function __construct($id, $module = null) 
+    {
         $this->model = new User('read');
         parent::__construct($id, $module);
     }
     
     /**
      * Function returns user data
-     * 
      * @method GET
-     * @param integer $id user id
      */
-    public function actionView( ){
-        if(!Yii::app()->user->checkAccess('getUser')){
+    public function actionView()
+    {
+        if (!Yii::app()->user->checkAccess('getUser')) {
             $this->accessDenied();
         }
         $userData = $this->getView(false);
@@ -54,8 +129,9 @@ class UsersController extends ApiController{
      * Function returns user list
      * @method GET
      */
-    public function actionList(){
-        if(!Yii::app()->user->checkAccess('getUser')){
+    public function actionList()
+    {
+        if (!Yii::app()->user->checkAccess('getUser')) {
             $this->accessDenied();
         }
         
@@ -64,16 +140,17 @@ class UsersController extends ApiController{
         $this->sendJson(
             $this->sanitizeUserData($userData), 
             $this->statusCode,
-            $this->statusCode==200?array($this->getContentRangeHeader()) : array()
+            $this->statusCode==200 ? array($this->getContentRangeHeader()) : array()
         );
     }
     
     /**
-     * Function creates new user.
+     * Function creates new user
      * @method POST
      */
-    public function actionCreate(){
-        if(!Yii::app()->user->checkAccess('createUser')){
+    public function actionCreate()
+    {
+        if (!Yii::app()->user->checkAccess('createUser')) {
             $this->accessDenied();
         }
         
@@ -91,8 +168,9 @@ class UsersController extends ApiController{
      * Function updates user.
      * @method PUT
      */
-    public function actionUpdate( ){
-        if(!Yii::app()->user->checkAccess('updateUser')){
+    public function actionUpdate()
+    {
+        if (!Yii::app()->user->checkAccess('updateUser')) {
             $this->accessDenied();
         }
         
@@ -110,8 +188,9 @@ class UsersController extends ApiController{
      * Function deletes user.
      * @method DELETE
      */
-    public function actionDelete( ){
-        if(!Yii::app()->user->checkAccess('deleteUser')){
+    public function actionDelete()
+    {
+        if (!Yii::app()->user->checkAccess('deleteUser')) {
             $this->accessDenied();
         }
         
@@ -125,40 +204,39 @@ class UsersController extends ApiController{
         );
     }
     
-    public function getRelations() {
+    public function getRelations() 
+    {
         return array(
-            'comments'=>array( // relation GET parameter name (...?with=comments)
-                'relationName'=>'comments', //model relation name
-                'columnName'=>'comments', //column name in response
-                'return'=>'array' //return array of arrays or array of models
+            'comments'=>array(          // relation GET parameter name (...?with=comments)
+                'relationName'=>'comments',  //model relation name
+                'columnName'=>'comments',    //column name in response
+                'return'=>'array'            //return array of arrays or array of models
             )
         );
     }
 
     /**
      * Function returns sanitized user data
-     * 
      * @param array $userData user data or collection of user data
      * @return array sanitized user data
      */
-    private function sanitizeUserData( $userData ){
+    private function sanitizeUserData($userData)
+    {
         function unsetData(&$data){
             unset($data['password']);
             unset($data['guid']);
             return $data;
         }
         
-        if($this->isCollection($userData)){
-            foreach($userData as &$data){
+        if ($this->isCollection($userData)) {
+            foreach ($userData as &$data) {
                 unsetData($data);
             }
-        }
-        else{
+        } else {
             unsetData($userData);
         }
         return $userData;
     }
-    
 }
 ```
 
@@ -191,7 +269,7 @@ GET: /users?search={"name":"alex"} — user with name contains the substring ale
 #### relations
 
 ```
-GET: /user/1?with=comments,posts — get user data with comments and posts array
+GET: /user/1?with=comments,posts — get user data with comments and posts array (comma separated list of relations in `with` GET parameter)
 {
     "id":"1",
     "first_name":"Alex",
@@ -205,9 +283,9 @@ GET: /user/1?with=comments,posts — get user data with comments and posts array
 ### Deleting
 
 ```
-DELETE: /user/42 
-DELETE: /user 
-DELETE: /user?filter={"first_name":"Alex"}
+DELETE: /user/42 - delete user with id = 42
+DELETE: /user  - delete all users
+DELETE: /user?filter={"first_name":"Alex"} - delete users with name 'Alex'
 ```
 
 ### Create
@@ -217,7 +295,7 @@ POST: /user - create new user
 ```
 ### Create collection
 ```
-POST: /user - create new use
+POST: /user - create new users
 ```
 pass POST parameters:
 ```
@@ -230,7 +308,7 @@ Creating two users 'admin' and 'guest'
 
 ### Update
 ```
-PUT: /user/42
+PUT: /user/42 - update user with id = 42
 ```
 #### Update collection
 ```
@@ -251,4 +329,5 @@ GET: /users/?offset=10&limit=10
 GET: /users/?order=id DESC
 GET: /users/?order=id ASC
 GET: /users/?order=parent_id ASC,ordering ASC
+GET: /users/?order=comment.id&with=comment
 ```
