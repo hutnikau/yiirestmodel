@@ -18,6 +18,10 @@ Add to config:
     array('api/<controller>/delete', 'pattern'=>'api/<controller:\w+>', 'verb'=>'DELETE'),
 ```
 
+## Documentation 
+
+http://goodnickoff.github.io/
+
 ## Usage 
 
 Create module and controllers in it.
