@@ -310,8 +310,8 @@ class ApiController extends Controller
      * 
      * @param CActiveRecord $model Model class instance
      * @param int $id id attribute for which you want to find a record.
-     * @param boolean $newIfNull create new model if $id is null.
-     * If $id parameter is not set then return empty model
+     * @param boolean $newIfNull create new model in $id is null.
+     * If $id is not set then return empty model
      * @return CActiveRecord model
      */
     public function getModel(CActiveRecord $model, $id = null, $newIfNull = true)
@@ -320,7 +320,9 @@ class ApiController extends Controller
             return new $model;
         
         $this->criteria = new CDbCriteria();
-        $this->criteria->addCondition("$this->idParamName=:id");
+        $this->criteria->addCondition(
+            $this->model->getTableAlias($this->tableAliasQuotes).".".$this->idParamName."=:id"
+        );
         $this->criteria->params[':id'] = $id;
         $this->criteria->mergeWith($this->baseCriteria);
         
@@ -338,7 +340,6 @@ class ApiController extends Controller
         
         return $model;
     }
-    
     
     /**
      * Function returns array of models which will be affected (update or delete)
@@ -453,6 +454,7 @@ class ApiController extends Controller
      */
     public function getModelErrors()
     {
+        //if(is_array($this->_modelErrors) && count($this->_modelErrors)===1 && isset($this->_modelErrors[0])){
         if(!$this->isCollection() && isset($this->_modelErrors[0])){
             return $this->_modelErrors[0];
         }
@@ -460,22 +462,8 @@ class ApiController extends Controller
     }
     
     /**
-     * Function returns relations rules for API entity.
-     * Example:
-     * <pre>
-     * return array(
-     *   'comments'=>array(
-     *      'columnName'=>'usreComments',       //string name of array key with relation data
-     *      'return'=>'array',                  //'object'|'array' return CActiveRecord object or array
-     *      'relationName'=>'comments',         //string name of relation in model
-     *      'keyField'=>'id',                   //string he name of the key field. This is a field that uniquely identifies a data record. 
-     *                                          //Data in response will be indexed by this key value. If it's not set data will be indexed in order. 
-     *      'safeAttributes'=>'content, date'   //string comma separated list of relation attributes which will be represented in response.
-     *    ),      
-     * );
-     * </pre>
-     * @return array array of relation configs
-     * @see ApiRelationProvider::$relationsConfig.
+     * Function returns relations rules for API entity
+     * @return array array of relations
      */
     public function getRelations()
     {
@@ -773,7 +761,7 @@ class ApiController extends Controller
     protected function getRecordId($id = null)
     {
         if (!is_numeric($id)) {
-            $id = Yii::app()->request->getParam($this->idParamName, null);
+            $id = Yii::app()->request->getParam('id', null);
         }
         return $id;
     }
