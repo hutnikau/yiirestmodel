@@ -52,7 +52,8 @@
  * @author Oleg Gutnikov <goodnickoff@gmail.com>
  * @package api
  */
-class ApiRelationProvider {
+class ApiRelationProvider 
+{
     
     /**
      *
@@ -97,12 +98,13 @@ class ApiRelationProvider {
     
     public $relations = array();
     
-    public function __construct( array $relationsConfig = array()){
+    public function __construct( array $relationsConfig = array())
+    {
         $this->relationsConfig = $relationsConfig['config'];
-        if(isset($relationsConfig['model'])){
+        if (isset($relationsConfig['model'])) {
             $this->model = $relationsConfig['model'];
         }
-        $this->with = Yii::app()->request->getParam( $this->requestParamName , "" );
+        $this->with = Yii::app()->request->getParam($this->requestParamName, "");
         $this->relations = $this->normalizeRelations();
     }
     
@@ -112,27 +114,26 @@ class ApiRelationProvider {
      * @param CActiveRecord $model
      * @return array relations data
      */
-    public function getData( CActiveRecord $model ){
+    public function getData(CActiveRecord $model)
+    {
         $this->model = $model;
         $result = array();
         $relationData = array();
         $keys = array();
-        $hasMany = false;
         
-        foreach($this->relations as $relationKey=>$relationConfig){
-            $columnName = isset($relationConfig['columnName'])?$relationConfig['columnName']:$relationKey;
-            $keys[$columnName] = isset($relationConfig['keyField'])? $relationConfig['keyField'] : false;
+        foreach ($this->relations as $relationKey => $relationConfig) {
+            $columnName = isset($relationConfig['columnName']) ? $relationConfig['columnName'] : $relationKey;
+            $keys[$columnName] = isset($relationConfig['keyField']) ? $relationConfig['keyField'] : false;
             $relationData[$columnName] = $this->getRelationData($relationKey);
         }
         
-        foreach($relationData as $relName=>$relData){
-            if(isset($model->relations()[$relName])){
+        foreach ($relationData as $relName => $relData) {
+            if (isset($model->relations()[$relName])) {
                 $result[$relName] = array();
-                foreach($relData as $data){
-                    if($keys[$relName] && isset($data[$keys[$relName]])){
+                foreach ($relData as $data) {
+                    if ($keys[$relName] && isset($data[$keys[$relName]])) {
                         $result[$relName][$data[$keys[$relName]]] = $data;
-                    }
-                    else{
+                    } else {
                         $result[$relName][] = $data;
                     }
                 }
@@ -153,8 +154,7 @@ class ApiRelationProvider {
     protected function getRelationData($relationName)
     {
         $relationConfig = $this->relations[$relationName];
-        $relationName = isset($relationConfig['relationName'])?$relationConfig['relationName']:$relationName;
-        $columnName = isset($relationConfig['columnName'])?$relationConfig['columnName']:$relationName;
+        $relationName = isset($relationConfig['relationName']) ? $relationConfig['relationName'] : $relationName;
         $return = isset($relationConfig['return'])? $relationConfig['return'] : 'object';
         $relationResult = $this->model->$relationName;
         $result = array();
@@ -175,12 +175,12 @@ class ApiRelationProvider {
                     $arrayOfModels = $arrayOfModels && $val instanceof CActiveRecord;
                 }
             );
-            if($arrayOfModels){
+            if ($arrayOfModels) {
                 foreach ($relationResult as $model) {
                     $result[] = $this->getSafeAttributes($relationName, $model->attributes);
                 }
             } else {
-                if (count($relationResult) == count($relationResult, COUNT_RECURSIVE)) {//multidimensional array
+                if (count($relationResult) !== count($relationResult, COUNT_RECURSIVE)) {//multidimensional array
                     foreach ($relationResult as $data) {
                         $result[] = $this->getSafeAttributes($relationName, $data);
                     }
@@ -197,8 +197,12 @@ class ApiRelationProvider {
      * Function returns relation attribures that lists in 
      * @param type $attributes
      */
-    protected function getSafeAttributes($relationName, $attributes){
-        if(isset($this->relations[$relationName]['safeAttributes']) && is_array($this->relations[$relationName]['safeAttributes'])){
+    protected function getSafeAttributes($relationName, $attributes)
+    {
+        if (
+            isset($this->relations[$relationName]['safeAttributes']) 
+            && is_array($this->relations[$relationName]['safeAttributes'])
+        ) {
             $attributes = array_intersect_key($attributes, array_flip($this->relations[$relationName]['safeAttributes']));
         }
         return $attributes;
@@ -208,14 +212,15 @@ class ApiRelationProvider {
      * Function returns array with list of relations names
      * @return array
      */
-    public function getRelationsList(){
+    public function getRelationsList() 
+    {
         $list = array();
         $relations = array();
-        if($this->model){
+        if ($this->model) {
             $relations = $this->model->relations();
         }
-        foreach($this->relations as $relation){
-            if(isset($relations[$relation['relationName']])){
+        foreach ($this->relations as $relation) {
+            if (isset($relations[$relation['relationName']])) {
                 $list[] = $relation['relationName'];
             }
         }
@@ -227,27 +232,27 @@ class ApiRelationProvider {
      * 
      * @return array where key is relation name and value is relation config array.
      */
-    protected function normalizeRelations( ){
+    protected function normalizeRelations()
+    {
         $result = array();
-        if(is_string($this->with)){
+        if (is_string($this->with)) {
             $with = explode(',', $this->with);
         }
-        if(is_array($with)){
-            foreach($with as $relationName){
-                if(!$relationName)
+        if (is_array($with)) {
+            foreach ($with as $relationName) {
+                if (!$relationName)
                     continue;
                 $relationConfig = array();
                 $relationName = trim($relationName);
-                if(isset($this->relationsConfig[$relationName])){
+                if (isset($this->relationsConfig[$relationName])) {
                     $relationConfig = $this->relationsConfig[$relationName];
-                    if(isset($relationConfig['safeAttributes'])){
+                    if (isset($relationConfig['safeAttributes'])) {
                         $relationConfig['safeAttributes'] = array_map('trim', explode(',', $relationConfig['safeAttributes']));
                     }
-                }
-                else{
+                } else {
                     throw new CHttpException(400, "relation $relationName does not exists.");
                 }
-                if($relationName && !empty($relationConfig) )
+                if ($relationName && !empty($relationConfig))
                     $result[$relationName] = $relationConfig;
             }
         }
