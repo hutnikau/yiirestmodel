@@ -51,14 +51,18 @@ class ApiTestCase extends CDbTestCase {
      * @param boolean $reload need to reload cookies and not return from the cache.
      */
     public function getAuthCookies($reload = false){
-        if($reload || is_null($this->authCookies)){
+        $this->authCookies = unserialize(Yii::app()->testdb->createCommand(
+            "SELECT PHPSESSID from auth_data"
+        )->queryScalar());
+        if($reload || empty($this->authCookies)){
             $response = $this->post($this->loginUrl, $this->loginData);
             $cookies = array();
-            $this->createReport($response['body']);
             foreach($response['cookies'] as $cookieName=>$cookieData){
                 $cookies[$cookieName] = $cookieData['value'];
             }
             $this->authCookies = $cookies;
+            Yii::app()->testdb->createCommand()->delete('auth_data');
+            Yii::app()->testdb->createCommand()->insert('auth_data', array('PHPSESSID'=>serialize($this->authCookies)));
         }
         return $this->authCookies;
     }
