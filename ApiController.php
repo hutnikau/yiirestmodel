@@ -321,7 +321,7 @@ class ApiController extends Controller
         
         $this->criteria = new CDbCriteria();
         $this->criteria->addCondition(
-            $this->model->getTableAlias($this->tableAliasQuotes).".".$this->idParamName."=:id"
+            $model->getTableAlias($this->tableAliasQuotes).".".$this->idParamName."=:id"
         );
         $this->criteria->params[':id'] = $id;
         $this->criteria->mergeWith($this->baseCriteria);
