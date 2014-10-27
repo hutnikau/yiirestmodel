@@ -1,0 +1,18 @@
+{
+    "name": "goodnickoff/yiirestmodel",
+    "description": "Yii RESTful API",
+    "keywords": ["yii", "RESTful", "API"],
+    "homepage": "https://github.com/goodnickoff/yiirestmodel",
+    "type": "yii-extension",
+    "license": "New BSD License",
+    "authors": [
+        {
+            "name": "Oleg Gutnikov",
+            "email": "goodnickoff@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.4.0",
+        "yiisoft/yii": ">=1.1.14"
+    }
+}
