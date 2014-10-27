@@ -128,7 +128,7 @@ class ApiRelationProvider
         }
         
         foreach ($relationData as $relName => $relData) {
-            if (isset($model->relations()[$relName])) {
+            if (isset($model->relations()[$relName]) && count($relData) !== count($relData, COUNT_RECURSIVE)) {//multidimensional array
                 $result[$relName] = array();
                 foreach ($relData as $data) {
                     if ($keys[$relName] && isset($data[$keys[$relName]])) {
@@ -250,7 +250,14 @@ class ApiRelationProvider
                         $relationConfig['safeAttributes'] = array_map('trim', explode(',', $relationConfig['safeAttributes']));
                     }
                 } else {
-                    throw new CHttpException(400, "relation $relationName does not exists.");
+                    if (Yii::app()->controller instanceof ApiController) {
+                        Yii::app()->controller->sendJson(
+                            array('error'=>array('relation'=>"relation $relationName does not exists.")),
+                            400
+                        );
+                    } else {
+                        throw new CHttpException(400, "relation $relationName does not exists.");
+                    }
                 }
                 if ($relationName && !empty($relationConfig))
                     $result[$relationName] = $relationConfig;

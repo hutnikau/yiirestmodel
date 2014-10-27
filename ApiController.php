@@ -143,21 +143,20 @@ class ApiController extends Controller
             )
         );
         $this->criteria->with = $relationData->getRelationsList();
-        if(is_array($this->criteria->with) && !empty($this->criteria->with)){
+        if (is_array($this->criteria->with) && !empty($this->criteria->with)) {
             $this->criteria->together = true;
         }
         $this->criteria->mergeWith($this->getFilterCriteria() , 'OR');
         $this->criteria->mergeWith($this->getSearchCriteria() , 'OR');
         $this->criteria->mergeWith($this->baseCriteria, 'AND');
         
-        try{
-            $records = $this->model->findAll( $this->criteria );
+        try {
+            $records = $this->model->findAll($this->criteria);
             $result = array();
-            foreach($records as $record){
+            foreach ($records as $record) {
                 $result[] = array_merge($record->attributes, $relationData->getData($record));
             }
-        }
-        catch(Exception $ex){
+        } catch (Exception $ex) {
             $message = property_exists($ex, 'errorInfo')? $ex->errorInfo : $ex->getMessage();
             $result = array("error"=>$message);
             $this->statusCode = 400;
@@ -568,13 +567,14 @@ class ApiController extends Controller
      */
     protected function getFinalCriteriaParams()
     {
-        
         if ($this->criteriaParams === null) {
             $this->criteriaParams = array(
                 'limit' => 100, 
                 'offset' => 0
             );
-            $this->criteriaParams['order'] = $this->model!==null ? $this->model->getTableAlias($this->tableAliasQuotes).".$this->idParamName ASC": "t.$this->idParamName ASC"; 
+            $this->criteriaParams['order'] = $this->model!==null ? 
+                $this->model->getTableAlias($this->tableAliasQuotes).".$this->idParamName ASC": 
+                "t.$this->idParamName ASC"; 
         }
 
         $criteriaParams = array_intersect_key(
