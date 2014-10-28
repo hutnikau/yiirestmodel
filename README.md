@@ -335,3 +335,9 @@ GET: /users/?order=id ASC
 GET: /users/?order=parent_id ASC,ordering ASC
 GET: /users/?order=comment.id&with=comment
 ```
+
+### Response format
+By default response is sent in the format of JSON. To change the format of response pass `format` GET parameter with value `xml`
+```
+GET: /users?format=xml
+```
