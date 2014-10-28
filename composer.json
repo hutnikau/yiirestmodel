@@ -13,6 +13,6 @@
     ],
     "require": {
         "php": ">=5.4.0",
-        "yiisoft/yii": ">=1.1.14"
+        "yiisoft/yii": ">=1.1.15"
     }
 }

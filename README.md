@@ -33,7 +33,7 @@ Simple controller example:
  * @author Oleg Gutnikov <goodnickoff@gmail.com>
  * @package api\Users
  */
-class UsersController extends ApiController
+class CommentsController extends ApiController
 {
     
     public function __construct($id, $module = null) 
@@ -99,7 +99,7 @@ class UsersController extends ApiController
 }
 
 ```
-Advsnced controller example:
+Advanced controller example:
 ```php
 /**
  * Description of UserController

@@ -8,7 +8,7 @@
  * @author Oleg Gutnikov <goodnickoff@gmail.com>
  * @package api
  */
-class ApiController extends Controller
+class ApiController extends ApiBaseController
 {
     public $idParamName = 'id';
     
@@ -92,7 +92,7 @@ class ApiController extends Controller
     public function __construct($id, $module = null)
     {
         parent::__construct($id, $module);
-        $this->data = $this->getJson();
+        $this->data = $this->getInputParams();
     }
     
     /**
@@ -210,7 +210,7 @@ class ApiController extends Controller
         if (!$this->sendToEndUser) {
             return $result;
         }
-        $this->sendJson($result, $this->statusCode);
+        $this->sendData($result, $this->statusCode);
     }
     
     /**
@@ -259,7 +259,7 @@ class ApiController extends Controller
         if (!$this->sendToEndUser) {
             return $result;
         }
-        $this->sendJson($result, $this->statusCode);
+        $this->sendData($result, $this->statusCode);
     }
     
     /**
@@ -299,7 +299,7 @@ class ApiController extends Controller
             return $result;
         }
         
-        $this->sendJson($result, $this->statusCode);
+        $this->sendData($result, $this->statusCode);
     }
     
     /**
@@ -330,7 +330,7 @@ class ApiController extends Controller
         if(is_null($model)){
             $this->statusCode = 404;
             if($this->sendToEndUser){
-                $this->sendJson(
+                $this->sendData(
                     $this->notFoundErrorResponse, 
                     404
                 );
@@ -401,19 +401,19 @@ class ApiController extends Controller
                 $input = array($this->data);
             }
             if ($this->getMethod() === 'POST') {
-                foreach ($input as $data) {
+                foreach ($input as $ndx => $data) {
                     $model = new $this->model;
                     $model->attributes = $this->priorityData + $data;
                     $model->setScenario($this->model->scenario);
                     if (!$model->validate()) {
                         $valid = false;
                         $this->statusCode = 400;
-                        $result[] = $model->errors;
+                        $result[$ndx] = $model->errors;
                     }
                 }
             } elseif ($this->getMethod() === 'PUT') {
                 $models = $this->getModelsForAffect();
-                foreach ($models as $model) {
+                foreach ($models as $ndx => $model) {
                     if (!$this->isCollection()) {
                         $data = $input;
                     } else {
@@ -425,7 +425,7 @@ class ApiController extends Controller
                     if (!$model->validate()) {
                         $valid = false;
                         $this->statusCode = 400;
-                        $result[] = $model->errors;
+                        $result[$ndx] = $model->errors;
                     }
                 }
             }
@@ -444,7 +444,7 @@ class ApiController extends Controller
             return $valid;
         }
         
-        $this->sendJson($result, $this->statusCode);
+        $this->sendData($result, $this->statusCode);
     }
     
     /**
@@ -780,6 +780,6 @@ class ApiController extends Controller
             return $result;
         }
         
-        $this->sendJson($result, $this->statusCode, $headers);
+        $this->sendData($result, $this->statusCode, $headers);
     }
 }
