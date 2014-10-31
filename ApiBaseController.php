@@ -50,7 +50,7 @@ class ApiBaseController extends CController
                     parse_str(Yii::app()->request->rawBody, $result);
                 } 
             }
-            if(!is_array($result)){
+            if(!is_array($result) || (empty($result) && !empty($_POST))){
                 $result = $_POST;
             }
 
