@@ -183,7 +183,9 @@ class ApiController extends ApiBaseController
                 try{
                     $models = $this->getModelsForAffect();
                     foreach ($models as $model) {
-                        $model->save();
+                        if(!$model->save()){
+                           throw new CDbException($this->getModelErrors());
+                        }
                         $this->_affectedModels[] = $model;
                         $result[] = $model->attributes;
                     }
@@ -230,13 +232,21 @@ class ApiController extends ApiBaseController
             }
             $valid = $this->validate(false);
             if ($valid) {
-                foreach($models as $model){
-                    $model->save();
-                    $this->_affectedModels[] = $model;
-                    $result[] = $model->attributes;
+                 try{
+                    foreach ($models as $model) {
+                        if(!$model->save()){
+                           throw new CDbException($this->getModelErrors());
+                        }
+                        $this->_affectedModels[] = $model;
+                        $result[] = $model->attributes;
+                    }
+                    $this->statusCode = 200;
+                    $result = (count($models)===1)? $result[0] : $result;
+                } catch (Exception $ex) {
+                    $message = property_exists($ex, 'errorInfo')? $ex->errorInfo : $ex->getMessage();
+                    $result = array("error"=>$message);
+                    $this->statusCode = 400;
                 }
-                $this->statusCode = 200;
-                $result = (count($models)===1)? $result[0] : $result;
             } else {
                 $this->statusCode = 400;
                 $result = array('error'=>$this->getModelErrors());
