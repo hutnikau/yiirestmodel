@@ -181,18 +181,13 @@ class ApiController extends ApiBaseController
             $valid = $this->validate(false);
             if ($valid) {
                 try{
-                    $input = $this->data;
-                    if (!$this->isCollection()) {
-                        $input = array($this->data);
-                    }
-                    foreach($input as $data){
-                        $model = new $this->model;
-                        $model->setScenario($this->model->scenario);
-                        $model->attributes = $this->priorityData + $data;
+                    $models = $this->getModelsForAffect();
+                    foreach ($models as $model) {
                         $model->save();
                         $this->_affectedModels[] = $model;
                         $result[] = $model->attributes;
                     }
+
                     $result = count($this->_affectedModels)===1? $result[0] : $result;
                 } catch (Exception $ex) {
                     $message = property_exists($ex, 'errorInfo')? $ex->errorInfo : $ex->getMessage();
@@ -227,21 +222,14 @@ class ApiController extends ApiBaseController
         }
         if (!empty($this->data)) {
             $result = array();
-            $input = $this->data;
-            if (!$this->isCollection()) {
-                $input = array($this->data);
-            }
-            $updatedModel = $this->getModelsForAffect();
-            if (count($updatedModel) === 0) {
+            $models = $this->getModelsForAffect();
+            if (count($models) === 0) {
                 $result = $this->notFoundErrorResponse;
                 $this->statusCode = 404;
                 $valid = false;
             }
-            
             $valid = $this->validate(false);
-            
             if ($valid) {
-                $models = $this->getModelsForAffect();
                 foreach($models as $model){
                     $model->save();
                     $this->_affectedModels[] = $model;
@@ -343,9 +331,11 @@ class ApiController extends ApiBaseController
     /**
      * Function returns array of models which will be affected (update or delete)
      * or array of new models on create request
-     * @param boolean $refresh find models or return from cache.
+     * @param boolean $refresh Find models or return from cache.
+     * @param boolean $fillModels Whether to fill the model attributes.
+     * @return array Models that have to be affected.
      */
-    public function getModelsForAffect($refresh = false)
+    public function getModelsForAffect($refresh = false, $fillModels = true)
     {
         if ($this->_modelsForAffect == null || $refresh) {
             $this->_modelsForAffect = array();
@@ -359,22 +349,37 @@ class ApiController extends ApiBaseController
             }
             
             foreach ($input as $data) {
-                $id = ($this->isCollection() && isset($data[$this->idParamName]))? $data[$this->idParamName] : Yii::app()->request->getParam($this->idParamName, null);
+                $models = array();
+                $id = ($this->isCollection() && isset($data[$this->idParamName]))? 
+                    $data[$this->idParamName] : 
+                    Yii::app()->request->getParam('id', null);
+                
                 if ($id === null && !$this->isCollection() && $this->getMethod() !== 'POST') {
                     $this->criteria = new CDbCriteria();
                     $this->criteria->mergeWith($this->getFilterCriteria(), 'OR');
                     $this->criteria->mergeWith($this->getSearchCriteria(), 'OR');
                     $this->criteria->mergeWith($this->baseCriteria, 'AND');
-
-                    $this->_modelsForAffect = array_merge($this->model->findAll($this->criteria));
+                    $models = $this->model->findAll($this->criteria);
+                    foreach ($models as $model) {
+                        $model->setScenario($this->model->getScenario());
+                    }
                 } elseif($id === null && $this->isCollection() && $this->getMethod() === 'POST') {
-                    $this->_modelsForAffect[] = new $this->model($this->model->getScenario());
+                    $models = array(new $this->model($this->model->getScenario()));
                 } else {
                     $model = $this->getModel($this->model, $id);
                     if ($model !== null) {
-                        $this->_modelsForAffect[] = $model;
+                        $model->setScenario($this->model->getScenario());
+                        $models[] = $model;
                     }
                 }
+                
+                
+                if ($fillModels) {
+                    foreach ($models as $model) {
+                        $model->attributes = $this->priorityData + $data;
+                    }
+                }
+                $this->_modelsForAffect = array_merge($this->_modelsForAffect, $models);
             }
         }
         return $this->_modelsForAffect;
@@ -394,42 +399,16 @@ class ApiController extends ApiBaseController
     public function validate($sendToEndUser = null)
     {
         if (!empty($this->data)) {
-            $input = $this->data;
-            $result = array();
             $valid = true;
-            if (!$this->isCollection()) {
-                $input = array($this->data);
-            }
-            if ($this->getMethod() === 'POST') {
-                foreach ($input as $ndx => $data) {
-                    $model = new $this->model;
-                    $model->attributes = $this->priorityData + $data;
-                    $model->setScenario($this->model->scenario);
-                    if (!$model->validate()) {
-                        $valid = false;
-                        $this->statusCode = 400;
-                        $result[$ndx] = $model->errors;
-                    }
-                }
-            } elseif ($this->getMethod() === 'PUT') {
-                $models = $this->getModelsForAffect();
-                foreach ($models as $ndx => $model) {
-                    if (!$this->isCollection()) {
-                        $data = $input;
-                    } else {
-                        $data = array_values(array_filter($input, function($val) use ($model){return $val[$this->idParamName]==$model->{$this->idParamName};}));
-                    }
-
-                    $model->attributes = $this->priorityData + $data[0];
-                    $model->setScenario($this->model->scenario);
-                    if (!$model->validate()) {
-                        $valid = false;
-                        $this->statusCode = 400;
-                        $result[$ndx] = $model->errors;
-                    }
+            $result = array();
+            $models = $this->getModelsForAffect();
+            foreach ($models as $ndx => $model) {
+                if (!$model->validate()) {
+                    $valid = false;
+                    $this->statusCode = 400;
+                    $result[$ndx] = $model->errors;
                 }
             }
-            
         } else {
             if (!$sendToEndUser) {
                 $result = array('error'=>'Data is not received.');
