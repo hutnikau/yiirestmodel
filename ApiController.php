@@ -360,9 +360,9 @@ class ApiController extends ApiBaseController
             
             foreach ($input as $data) {
                 $models = array();
-                $id = ($this->isCollection() && isset($data[$this->idParamName]))? 
+                $id = ($this->isCollection() && isset($data[$this->idParamName]) && $data[$this->idParamName]!=='')? 
                     $data[$this->idParamName] : 
-                    Yii::app()->request->getParam('id', null);
+                    Yii::app()->request->getQuery('id', null);
                 
                 if ($id === null && !$this->isCollection() && $this->getMethod() !== 'POST') {
                     $this->criteria = new CDbCriteria();
@@ -373,7 +373,7 @@ class ApiController extends ApiBaseController
                     foreach ($models as $model) {
                         $model->setScenario($this->model->getScenario());
                     }
-                } elseif($id === null && $this->isCollection() && $this->getMethod() === 'POST') {
+                } elseif($id !== null && $this->isCollection() && $this->getMethod() === 'POST') {
                     $models = array(new $this->model($this->model->getScenario()));
                 } else {
                     $model = $this->getModel($this->model, $id);
@@ -382,7 +382,6 @@ class ApiController extends ApiBaseController
                         $models[] = $model;
                     }
                 }
-                
                 
                 if ($fillModels) {
                     foreach ($models as $model) {
