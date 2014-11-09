@@ -169,7 +169,7 @@ class ApiRelationProvider
             } elseif ($return == 'object') {
                 $result = $relationResult;
             }
-        } else {
+        } elseif(is_array($relationResult)) {
             $arrayOfModels = true;
             array_walk($relationResult, function($val) use(&$arrayOfModels){
                     $arrayOfModels = $arrayOfModels && $val instanceof CActiveRecord;
@@ -188,6 +188,8 @@ class ApiRelationProvider
                     $result = $this->getSafeAttributes($relationName, $relationResult);
                 }
             }
+        } else {
+            $result = $relationResult;
         }
         return $result;
     }
