@@ -24,6 +24,9 @@ class ApiController extends ApiBaseController
     /** @var int Http Status-Code */
     public $statusCode = 200;
     
+    /** @var array List of safe attributes which will be sent to end user. If array is empty then all attributes will be sent */
+    public $safeAttributes = array();
+    
     /**
      * Whether the response should be sent to the end user or should be returned as an array.
      * @var boolean 
@@ -161,6 +164,7 @@ class ApiController extends ApiBaseController
             $result = array("error"=>$message);
             $this->statusCode = 400;
         }
+        
         return $this->returnResult($result, $this->statusCode==200?array($this->getContentRangeHeader()) : array());
     }
     
@@ -204,10 +208,14 @@ class ApiController extends ApiBaseController
             $this->statusCode = 400;
             $result = array('error'=>'Data is not received.');
         }
-        if (!$this->sendToEndUser) {
+        
+        /*if (!$this->sendToEndUser) {
             return $result;
-        }
-        $this->sendData($result, $this->statusCode);
+        }*/
+        
+        return $this->returnResult($result);
+        
+        //$this->sendData($result, $this->statusCode);
     }
     
     /**
@@ -254,10 +262,12 @@ class ApiController extends ApiBaseController
         } else {
             $result = array('error'=>'Data is not received.');
         }
+        /*
         if (!$this->sendToEndUser) {
             return $result;
         }
-        $this->sendData($result, $this->statusCode);
+        $this->sendData($result, $this->statusCode);*/
+        return $this->returnResult($result);
     }
     
     /**
@@ -293,11 +303,11 @@ class ApiController extends ApiBaseController
         if (count($this->notFoundErrorResponse) == 1 && !isset($result['error'])) {
             $result = $result[0];
         }        
-        if (!$this->sendToEndUser) {
+        /*if (!$this->sendToEndUser) {
             return $result;
-        }
+        }*/
         
-        $this->sendData($result, $this->statusCode);
+        return $this->returnResult($result);
     }
     
     /**
@@ -431,8 +441,7 @@ class ApiController extends ApiBaseController
         if (!$sendToEndUser) {
             return $valid;
         }
-        
-        $this->sendData($result, $this->statusCode);
+        return $this->returnResult($result);
     }
     
     /**
@@ -764,6 +773,17 @@ class ApiController extends ApiBaseController
      */
     private function returnResult($result, $headers = array())
     {
+        if (!empty($this->safeAttributes) && $this->statusCode == 200) {
+            $safeAttrinutes = array_flip($this->safeAttributes);
+            if (array_values($result) === $result) {//indexed array
+                foreach ($result as &$row) {
+                    $row = array_intersect_key($row, $safeAttrinutes);
+                }
+            } else {
+                $result = array_intersect_key($result, $safeAttrinutes);
+            }
+        }
+        
         if (!$this->sendToEndUser) {
             return $result;
         }

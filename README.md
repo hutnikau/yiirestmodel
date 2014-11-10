@@ -25,91 +25,15 @@ http://goodnickoff.github.io/
 ## Usage 
 
 Create module and controllers in it.
-Simple controller example:
-```php
-/**
- * Description of UserController
- *
- * @author Oleg Gutnikov <goodnickoff@gmail.com>
- * @package api\Users
- */
-class CommentsController extends ApiController
-{
-    
-    public function __construct($id, $module = null) 
-    {
-        $this->model = new Comment('read');
-        parent::__construct($id, $module);
-    }
-    
-    /**
-     * Function returns comment data
-     * @method GET
-     */
-    public function actionView()
-    {
-        $this->getView();
-    }
-    
-    /**
-     * Function returns comments list
-     * @method GET
-     */
-    public function actionList()
-    {
-        $this->getList();
-    }
-    
-    /**
-     * Function creates new comment.
-     * @method POST
-     */
-    public function actionCreate()
-    {
-        $this->create();
-    }
-    
-    /**
-     * Function updates comment.
-     * @method PUT
-     */
-    public function actionUpdate(){
-        $this->update();
-    }
-    
-    /**
-     * Function deletes comment.
-     * @method DELETE
-     */
-    public function actionDelete()
-    {
-        $userData = $this->delete();
-    }
-    
-    public function getRelations() 
-    {
-        return array(
-            'creator'=>array(       // relation GET parameter name (...?with=creator)
-                'relationName'=>'user',  //model relation name
-                'columnName'=>'creator', //column name in response
-                'return'=>'array'        //'array'|'object'  return array or model object
-            )
-        );
-    }
-}
 
-```
-Advanced controller example:
+Controller example:
 ```php
-/**
- * Description of UserController
- *
- * @author Oleg Gutnikov <goodnickoff@gmail.com>
- * @package api\Users
- */
 class UsersController extends ApiController
 {
-    
+    public $safeAttributes = array(
+        'id', 'first_name',  'middle_name', 'last_name', 'email', 
+    );
+
     public function __construct($id, $module = null) 
     {
         $this->model = new User('read');
@@ -125,8 +49,7 @@ class UsersController extends ApiController
         if (!Yii::app()->user->checkAccess('getUser')) {
             $this->accessDenied();
         }
-        $userData = $this->getView(false);
-        $this->sendJson($this->sanitizeUserData($userData), $this->statusCode);
+        $this->getView();
     }
     
     /**
@@ -139,13 +62,7 @@ class UsersController extends ApiController
             $this->accessDenied();
         }
         
-        $userData = $this->getList(false);
-        
-        $this->sendJson(
-            $this->sanitizeUserData($userData), 
-            $this->statusCode,
-            $this->statusCode==200 ? array($this->getContentRangeHeader()) : array()
-        );
+        $this->getList();
     }
     
     /**
@@ -160,12 +77,7 @@ class UsersController extends ApiController
         
         $this->model->setScenario('create'); 
         
-        $userData = $this->create(false);
-        
-        $this->sendJson(
-            $this->sanitizeUserData($userData),
-            $this->statusCode
-        );
+        $this->create();
     }
     
     /**
@@ -180,12 +92,7 @@ class UsersController extends ApiController
         
         $this->model->setScenario('update'); 
 
-        $userData = $this->update(false);
-        
-        $this->sendJson(
-            $this->sanitizeUserData($userData),
-            $this->statusCode
-        );
+        $this->update();
     }
     
     /**
@@ -200,12 +107,7 @@ class UsersController extends ApiController
         
         $this->model->setScenario('delete'); 
 
-        $userData = $this->delete(false);
-        
-        $this->sendJson(
-            $this->sanitizeUserData($userData),
-            $this->statusCode
-        );
+        $this->delete();
     }
     
     public function getRelations() 
@@ -217,29 +119,6 @@ class UsersController extends ApiController
                 'return'=>'array'            //return array of arrays or array of models
             )
         );
-    }
-
-    /**
-     * Function returns sanitized user data
-     * @param array $userData user data or collection of user data
-     * @return array sanitized user data
-     */
-    private function sanitizeUserData($userData)
-    {
-        function unsetData(&$data){
-            unset($data['password']);
-            unset($data['guid']);
-            return $data;
-        }
-        
-        if ($this->isCollection($userData)) {
-            foreach ($userData as &$data) {
-                unsetData($data);
-            }
-        } else {
-            unsetData($userData);
-        }
-        return $userData;
     }
 }
 ```
@@ -282,7 +161,6 @@ GET: /user/1?with=comments,posts — get user data with comments and posts array
     ...
 }
 ```
-
 
 ### Deleting
 
