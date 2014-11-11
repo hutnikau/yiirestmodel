@@ -109,6 +109,11 @@ class ApiBaseController extends CController
          */
         protected function accessDenied()
         {
-            $this->accessDenied();
+            $this->sendJson( 
+                array( 
+                    'error'=>array('access'=>Yii::t('yii', 'You do not have sufficient permissions to access.')) 
+                ), 
+                403
+            );
         }
 }

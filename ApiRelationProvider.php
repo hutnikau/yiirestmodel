@@ -56,13 +56,12 @@ class ApiRelationProvider
 {
     
     /**
-     *
      * @var string $_GET parameter name containing a list of relations.
      */
     public $requestParamName = 'with';
     
     /** 
-     * @var mixed list of relations which to be returned.
+     * @var mixed List of relation aliases which to be fetched.
      * 
      * Example:
      * 
@@ -80,9 +79,9 @@ class ApiRelationProvider
     /**
      * @var array relations config
      * <ul>
-     *   <li>'columnName' - string name of array key with relation data</li>
-     *   <li>'return' - 'object'|'array' return CActiveRecord object or array</li>
-     *   <li>'relationName' - string name of relation in model</li>
+     *   <li>'columnName' - string name of array key with relation data. If not set, the relation alias will be used.</li>
+     *   <li>'relationName' - string name of relation in model. If not set, the relation alias will be used.</li>
+     *   <li>'return' - 'object'|'array' return CActiveRecord object or array. 'array' by default.</li>
      *   <li>
      *     'keyField' - string he name of the key field. This is a field that uniquely identifies a data record. 
      *     Data in response will be indexed by this key value. If it's not set data will be indexed in order. 
@@ -94,6 +93,9 @@ class ApiRelationProvider
      */
     public $relationsConfig = array();
     
+    /**
+     * @var CActiveRecord model for fetching related data
+     */
     public $model;
     
     public $relations = array();
@@ -104,7 +106,7 @@ class ApiRelationProvider
         if (isset($relationsConfig['model'])) {
             $this->model = $relationsConfig['model'];
         }
-        $this->with = Yii::app()->request->getParam($this->requestParamName, "");
+        $this->with = Yii::app()->request->getQuery($this->requestParamName, "");
         $this->relations = $this->normalizeRelations();
     }
     
@@ -120,15 +122,16 @@ class ApiRelationProvider
         $result = array();
         $relationData = array();
         $keys = array();
+        $relationNamesMap = array();
         
-        foreach ($this->relations as $relationKey => $relationConfig) {
-            $columnName = isset($relationConfig['columnName']) ? $relationConfig['columnName'] : $relationKey;
-            $keys[$columnName] = isset($relationConfig['keyField']) ? $relationConfig['keyField'] : false;
-            $relationData[$columnName] = $this->getRelationData($relationKey);
+        foreach ($this->relations as $relationAlias => $relationConfig) {
+            $keys[$relationConfig['columnName']] = $relationConfig['keyField'];
+            $relationData[$relationConfig['columnName']] = $this->getRelationData($relationAlias);
+            $relationNamesMap[$relationConfig['columnName']] = $relationConfig['relationName'];
         }
         
         foreach ($relationData as $relName => $relData) {
-            if (isset($model->relations()[$relName]) && count($relData) !== count($relData, COUNT_RECURSIVE)) {//multidimensional array
+            if (isset($model->relations()[$relationNamesMap[$relName]]) && count($relData) !== count($relData, COUNT_RECURSIVE)) {//multidimensional array
                 $result[$relName] = array();
                 foreach ($relData as $data) {
                     if ($keys[$relName] && isset($data[$keys[$relName]])) {
@@ -240,31 +243,42 @@ class ApiRelationProvider
         if (is_string($this->with)) {
             $with = explode(',', $this->with);
         }
-        if (is_array($with)) {
-            foreach ($with as $relationName) {
-                if (!$relationName)
-                    continue;
-                $relationConfig = array();
-                $relationName = trim($relationName);
-                if (isset($this->relationsConfig[$relationName])) {
-                    $relationConfig = $this->relationsConfig[$relationName];
-                    if (isset($relationConfig['safeAttributes'])) {
-                        $relationConfig['safeAttributes'] = array_map('trim', explode(',', $relationConfig['safeAttributes']));
-                    }
-                } else {
-                    if (Yii::app()->controller instanceof ApiController) {
-                        Yii::app()->controller->sendJson(
-                            array('error'=>array('relation'=>"relation $relationName does not exists.")),
-                            400
-                        );
-                    } else {
-                        throw new CHttpException(400, "relation $relationName does not exists.");
-                    }
-                }
-                if ($relationName && !empty($relationConfig))
-                    $result[$relationName] = $relationConfig;
-            }
+        
+        if (!is_array($with) || empty($with)) {
+            return $result;
         }
+        
+        foreach ($with as $relationAlias) {
+            $relationAlias = trim($relationAlias);
+            if (empty($relationAlias))
+                continue;
+            $relationConfig = array();
+            if (isset($this->relationsConfig[$relationAlias])) {
+                $relationConfig = $this->relationsConfig[$relationAlias];
+                if (isset($relationConfig['safeAttributes'])) {
+                    $relationConfig['safeAttributes'] = array_map('trim', explode(',', $relationConfig['safeAttributes']));
+                }
+                if (!isset($relationConfig['columnName'])) {
+                    $relationConfig['columnName'] = $relationAlias;
+                }
+                if (!isset($relationConfig['relationName'])) {
+                    $relationConfig['relationName'] = $relationAlias;
+                }
+                if (!isset($relationConfig['return'])) {
+                    $relationConfig['return'] = 'array';
+                }
+                if (!isset($relationConfig['keyField'])) {
+                    $relationConfig['keyField'] = null;
+                }
+                 
+            } else {
+                throw new CException("relation $relationAlias does not exists.");
+            }
+            
+            if (!empty($relationConfig))
+                $result[$relationAlias] = $relationConfig;
+        }
+        
         return $result;
     }
 }

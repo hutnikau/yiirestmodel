@@ -5,6 +5,9 @@
  * Each application REST API controller class extends this class for inheriting 
  * common for API controller methods and properties.
  * 
+ * @property CDbCriteria $baseCriteria The precedence criteria.
+ * @property string $method Request type, such as GET, POST, PUT, DELETE.
+ * 
  * @author Oleg Gutnikov <goodnickoff@gmail.com>
  * @package api
  */
@@ -12,24 +15,33 @@ class ApiController extends ApiBaseController
 {
     public $idParamName = 'id';
     
-    /** @var array params from php://input. */
+    /** 
+     * @var array params from php://input. 
+     */
     public $data = array();
     
-    /** @var array priority model data which will override data from input. */
+    /** 
+     * @var array priority model data which will override data from input. 
+     */
     public $priorityData = array();
     
-    /** @var CActiveRecord controller model. */
+    /** 
+     * @var CActiveRecord controller model. 
+     */
     public $model;
     
-    /** @var int Http Status-Code */
+    /** 
+     * @var int Http Status-Code 
+     */
     public $statusCode = 200;
     
-    /** @var array List of safe attributes which will be sent to end user. If array is empty then all attributes will be sent */
+    /** 
+     * @var array List of safe attributes which will be sent to end user. If array is empty then all attributes will be sent s
+     */
     public $safeAttributes = array();
     
-    /**
-     * Whether the response should be sent to the end user or should be returned as an array.
-     * @var boolean 
+    /*
+     * @var boolean Whether the response should be sent to the end user or should be returned as an array.
      */
     public $sendToEndUser = true;
     
@@ -67,7 +79,9 @@ class ApiController extends ApiBaseController
      * Response to the user when no record found.
      * @var array  
      */
-    public $notFoundErrorResponse = array( 'error'=>array('Not found') );
+    public $notFoundErrorResponse = array(
+        'error'=>array('Not found') 
+    );
     
     /**
      * Whether to quote the alias name
@@ -115,13 +129,18 @@ class ApiController extends ApiBaseController
             $result = $this->notFoundErrorResponse;
             $this->statusCode = 404;
         } else {
-            $relationData = new ApiRelationProvider(
-                array(
-                    'config'=>$this->getRelations(),
-                    'model'=>$this->model
-                )
-            );
-            $result = array_merge($model->attributes, $relationData->getData($model));
+            try {
+                $relationData = new ApiRelationProvider(
+                    array(
+                        'config'=>$this->getRelations(),
+                        'model'=>$this->model
+                    )
+                );
+                $result = array_merge($model->attributes, $relationData->getData($model));
+            } catch (CException $e) {
+                $result = array('error'=>array($e->getMessage()));
+                $this->statusCode = 400;
+            }
         }        
         return $this->returnResult($result);
     }
@@ -139,16 +158,23 @@ class ApiController extends ApiBaseController
         }
         $this->checkModel();
         $this->criteria = new CDbCriteria($this->getFinalCriteriaParams());
-        $relationData = new ApiRelationProvider(
-            array(
-                'config'=>$this->getRelations(),
-                'model'=>$this->model
-            )
-        );
-        $this->criteria->with = $relationData->getRelationsList();
+        try {
+            $relationData = new ApiRelationProvider(
+                array(
+                    'config'=>$this->getRelations(),
+                    'model'=>$this->model
+                )
+            );
+        } catch (CException $e) {
+            $result = array('error'=>array($e->getMessage()));
+            $this->statusCode = 400;
+            return $this->returnResult($result);
+        }
+        
         if (is_array($this->criteria->with) && !empty($this->criteria->with)) {
             $this->criteria->together = true;
         }
+        $this->criteria->with = $relationData->getRelationsList();
         $this->criteria->mergeWith($this->getFilterCriteria() , 'OR');
         $this->criteria->mergeWith($this->getSearchCriteria() , 'OR');
         $this->criteria->mergeWith($this->baseCriteria, 'AND');
