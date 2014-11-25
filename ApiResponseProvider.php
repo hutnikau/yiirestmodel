@@ -15,42 +15,6 @@ abstract class ApiResponseProvider
     const MODE_XML = 2;
     
     /**
-     * Constructor.
-     * @param string $format the format of data (e.g. 'xml'). If not set,
-     * JSON format will be used.
-     */
-    /*public function __construct($format = 'json')
-    {
-        switch (mb_strtolower(Yii::app()->request->getQuery('format', $format))) {
-            case 'xml':
-                $this->_mode = self::MODE_XML;
-                break;
-            case 'json':
-                $this->_mode = self::MODE_JSON;
-                break;
-            default:
-                $this->_mode = self::MODE_JSON;
-                break;
-        }
-    }*/
-
-    /**
-     * @return ApiResponseProvider Instance based on {@link $_mode} property.
-     */
-    /*public static function getResponseProvider($format = 'json')
-    {
-        
-        switch ($this->_mode) {
-            case self::MODE_JSON:
-                return new ApiJsonResponseProvider();
-                break;
-            case self::MODE_XML:
-                return new ApiXmlResponseProvider();
-                break;
-        }
-    }*/
-
-    /**
      * Function converts $data array to appropriate format, sends it to client and terminates the application.
      * Usage example:
      * <pre>

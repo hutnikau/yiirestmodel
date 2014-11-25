@@ -36,7 +36,7 @@ class ApiController extends ApiBaseController
     public $statusCode = 200;
     
     /** 
-     * @var array List of safe attributes which will be sent to end user. If array is empty then all attributes will be sent s
+     * @var array List of safe attributes which will be sent to end user. If array is empty then all attributes will be sent.
      */
     public $safeAttributes = array();
     
@@ -235,13 +235,7 @@ class ApiController extends ApiBaseController
             $result = array('error'=>'Data is not received.');
         }
         
-        /*if (!$this->sendToEndUser) {
-            return $result;
-        }*/
-        
         return $this->returnResult($result);
-        
-        //$this->sendData($result, $this->statusCode);
     }
     
     /**
@@ -288,11 +282,7 @@ class ApiController extends ApiBaseController
         } else {
             $result = array('error'=>'Data is not received.');
         }
-        /*
-        if (!$this->sendToEndUser) {
-            return $result;
-        }
-        $this->sendData($result, $this->statusCode);*/
+        
         return $this->returnResult($result);
     }
     
@@ -329,9 +319,6 @@ class ApiController extends ApiBaseController
         if (count($this->notFoundErrorResponse) == 1 && !isset($result['error'])) {
             $result = $result[0];
         }        
-        /*if (!$this->sendToEndUser) {
-            return $result;
-        }*/
         
         return $this->returnResult($result);
     }

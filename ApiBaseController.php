@@ -16,12 +16,17 @@ class ApiBaseController extends CController
 	public $layout = false;
         public $statusCode = 200;
         
+        /**
+         * @var string The format in which data is sent to the user.
+         */
+        public $format = 'json';
+        
         private $_responseProvider;
 
         public function __construct($id, $module=null)
         {
             parent::__construct($id, $module);
-            switch (mb_strtolower(Yii::app()->request->getQuery('format', 'json'))) {
+            switch (mb_strtolower(Yii::app()->request->getQuery('format', $this->format))) {
                 case 'xml':
                     $this->responseProvider = new ApiXmlResponseProvider();
                     break;
@@ -94,6 +99,13 @@ class ApiBaseController extends CController
             $this->sendData($data, $status,  $headers);
         }
         
+        /**
+         * Function send data to end user and terminate the application.
+         * Format of data defined based on {@link responseProvider} 
+         * @param array $data Data to be sent
+         * @param integer $status Status code (e.g. 200 or 403)
+         * @param array $headers List of additional headers to use when sending an response
+         */
         public function sendData($data, $status = null, array $headers=array())
         {
             if ($status === null) {
