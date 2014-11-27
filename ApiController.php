@@ -25,6 +25,11 @@ class ApiController extends ApiBaseController
      */
     public $priorityData = array();
     
+    /**
+     * @var array relations rules for API entity
+     */
+    public $relations = array();
+    
     /** 
      * @var CActiveRecord controller model. 
      */
@@ -476,7 +481,7 @@ class ApiController extends ApiBaseController
      */
     public function getRelations()
     {
-        return array();
+        return $this->relations;
     }
     
     /**
