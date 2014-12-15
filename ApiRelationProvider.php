@@ -131,7 +131,8 @@ class ApiRelationProvider
         }
         
         foreach ($relationData as $relName => $relData) {
-            if (isset($model->relations()[$relationNamesMap[$relName]]) && count($relData) !== count($relData, COUNT_RECURSIVE)) {//multidimensional array
+            $relations = $model->relations();
+            if (isset($relations[$relationNamesMap[$relName]]) && count($relData) !== count($relData, COUNT_RECURSIVE)) {//multidimensional array
                 $result[$relName] = array();
                 foreach ($relData as $data) {
                     if ($keys[$relName] && isset($data[$keys[$relName]])) {

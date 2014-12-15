@@ -176,10 +176,10 @@ class ApiController extends ApiBaseController
             return $this->returnResult($result);
         }
         
+        $this->criteria->with = $relationData->getRelationsList();
         if (is_array($this->criteria->with) && !empty($this->criteria->with)) {
             $this->criteria->together = true;
         }
-        $this->criteria->with = $relationData->getRelationsList();
         $this->criteria->mergeWith($this->getFilterCriteria() , 'OR');
         $this->criteria->mergeWith($this->getSearchCriteria() , 'OR');
         $this->criteria->mergeWith($this->baseCriteria, 'AND');
