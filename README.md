@@ -20,7 +20,7 @@ Add to config:
 
 ## Documentation 
 
-http://goodnickoff.github.io/
+http://hutnikau.github.io/
 
 ## Usage 
 
